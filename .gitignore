@@ -1,0 +1,23 @@
+# Build products
+KP_LiquidGlass/Mac/build/
+*.aex
+*.plugin
+
+# Kernel preprocessing intermediates (Windows custom build steps)
+*.i
+DirectX_Assets/
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Visual Studio user state (for the future Win/ project)
+.vs/
+*.user
+x64/
+ARM64/
+
+# OS noise
+.DS_Store
+Thumbs.db
