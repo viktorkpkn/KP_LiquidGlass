@@ -41,6 +41,14 @@ Copy `KP_LiquidGlass.plugin` to:
 ~/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/
 ```
 
+Because this beta is not notarized by Apple, macOS quarantines downloaded
+copies and After Effects may refuse to load the plugin. After copying it,
+clear the flag once:
+
+```
+xattr -cr ~/Library/Application\ Support/Adobe/Common/Plug-ins/7.0/MediaCore/KP_LiquidGlass.plugin
+```
+
 Restart After Effects (plugins load only at startup). The effect appears
 under **Effects → KP Effects → KP_LiquidGlass**.
 
