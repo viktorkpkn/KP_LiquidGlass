@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{D8E1A4B7-6C3F-4E2A-9F5B-1C7D8E9A0B2F}</ProjectGuid>
+    <RootNamespace>KP_LiquidGlass</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>KP_LiquidGlass</ProjectName>
+    <!-- Build with /p:KPEnableCuda=0 to skip nvcc entirely; NVIDIA cards are
+         then served through DirectX like AMD/Intel (see WINDOWS_PORT.md). -->
+    <KPEnableCuda Condition="'$(KPEnableCuda)'==''">1</KPEnableCuda>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseOfMfc>false</UseOfMfc>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(AE_PLUGIN_BUILD_DIR)\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(AE_PLUGIN_BUILD_DIR)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)\</IntDir>
+    <IgnoreImportLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</IgnoreImportLibrary>
+    <IgnoreImportLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</IgnoreImportLibrary>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.aex</TargetExt>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.aex</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\Headers;..\..\..\Headers\SP;..\..\..\Headers\Win;..\..\..\Resources;..\..\..\Util;..\..\..\GPUUtils;$(BOOST_BASE_PATH)\;$(CUDA_SDK_BASE_PATH)\include\</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MSWindows;WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;KP_ENABLE_CUDA=$(KPEnableCuda);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0409</Culture>
+    </ResourceCompile>
+    <Link>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <ImportLibrary>$(IntDir)/$(TargetName).lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+      <AdditionalLibraryDirectories>$(CUDA_SDK_BASE_PATH)\lib\x64</AdditionalLibraryDirectories>
+      <AdditionalDependencies Condition="'$(KPEnableCuda)'=='1'">cudart_static.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(KPEnableCuda)'!='1'">d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /I /Q "$(ProjectDir)$(IntDir)DirectX_Assets\*.*" "$(OutDir)DirectX_Assets\"</Command>
+      <Message>Deploying DirectX_Assets next to the .aex</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\Headers;..\..\..\Headers\SP;..\..\..\Headers\Win;..\..\..\Resources;..\..\..\Util;..\..\..\GPUUtils;$(BOOST_BASE_PATH)\;$(CUDA_SDK_BASE_PATH)\include\</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MSWindows;WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;KP_ENABLE_CUDA=$(KPEnableCuda);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0409</Culture>
+    </ResourceCompile>
+    <Link>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <ImportLibrary>$(IntDir)/$(TargetName).lib</ImportLibrary>
+      <TargetMachine>MachineX64</TargetMachine>
+      <AdditionalLibraryDirectories>$(CUDA_SDK_BASE_PATH)\lib\x64</AdditionalLibraryDirectories>
+      <AdditionalDependencies Condition="'$(KPEnableCuda)'=='1'">cudart_static.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(KPEnableCuda)'!='1'">d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /I /Q "$(ProjectDir)$(IntDir)DirectX_Assets\*.*" "$(OutDir)DirectX_Assets\"</Command>
+      <Message>Deploying DirectX_Assets next to the .aex</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\KP_LiquidGlass.h" />
+    <ClInclude Include="..\..\..\Util\AEGP_SuiteHandler.h" />
+    <ClInclude Include="..\..\..\Util\DirectXUtils.h" />
+    <ClInclude Include="..\..\..\Util\Param_Utils.h" />
+    <ClInclude Include="..\..\..\Util\Smart_Utils.h" />
+    <ClInclude Include="..\..\..\Util\String_Utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\Util\DirectXUtils.cpp" />
+    <ClCompile Include="..\..\..\Util\Smart_Utils.cpp" />
+    <ClCompile Include="..\KP_LiquidGlass.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\KP_LiquidGlass_Kernel.cu">
+      <FileType>Document</FileType>
+      <ExcludedFromBuild Condition="'$(KPEnableCuda)'!='1'">true</ExcludedFromBuild>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">rem Correct compilation is dependant on nvcc being installed correctly, from the CUDA SDK
+"$(CUDA_SDK_BASE_PATH)\bin\nvcc.exe" -D_DEBUG -gencode arch=compute_75,code=sm_75 -gencode arch=compute_86,code=sm_86 -gencode arch=compute_89,code=sm_89 -gencode arch=compute_75,code=compute_75 -use_fast_math -m64 -c -ccbin "$(VC_ExecutablePath_x64_x64)" -D_MBCS -Xcompiler /MDd,/EHsc,/W3,/nologo,/Zi -I"$(CUDA_SDK_BASE_PATH)\include" -I./ -I"$(ProjectDir)..\..\..\GPUUtils" -I$(BOOST_BASE_PATH) -o "$(IntDir)%(Filename).obj" "$(ProjectDir)..\%(Filename).cu"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">rem Correct compilation is dependant on nvcc being installed correctly, from the CUDA SDK
+"$(CUDA_SDK_BASE_PATH)\bin\nvcc.exe" -gencode arch=compute_75,code=sm_75 -gencode arch=compute_86,code=sm_86 -gencode arch=compute_89,code=sm_89 -gencode arch=compute_75,code=compute_75 -use_fast_math -m64 -c -ccbin "$(VC_ExecutablePath_x64_x64)" -D_MBCS -Xcompiler /MD,/EHsc,/W3,/nologo,/Zi -I"$(CUDA_SDK_BASE_PATH)\include" -I./ -I"$(ProjectDir)..\..\..\GPUUtils" -I$(BOOST_BASE_PATH) -o "$(IntDir)%(Filename).obj" "$(ProjectDir)..\%(Filename).cu"</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Custom build step: Building %(Filename).cu</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Custom build step: Building %(Filename).cu</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename).obj</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename).obj</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\KP_LiquidGlass_Kernel.chlsl">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">rem Correct compilation is dependant on DXC being installed correctly, from the DirectX Shader Compiler
+if not exist "$(IntDir)DirectX_Assets" mkdir "$(IntDir)DirectX_Assets"
+del /Q "$(ProjectDir)%(Filename).i" 2&gt; nul
+"cl.exe" /nologo -D GF_DEVICE_TARGET_HLSL=1 -I"$(BOOST_BASE_PATH)" -I"..\..\..\GPUUtils" /TP /P "%(FullPath)"
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPPrepareMatteKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPPrepareMatteKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPPrepareMatteKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPPrepareMatteKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPJFASeedKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPJFASeedKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPJFASeedKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPJFASeedKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPJFAStepKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPJFAStepKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPJFAStepKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPJFAStepKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPJFAResolveKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPJFAResolveKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPJFAResolveKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPJFAResolveKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurHorizontalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurHorizontalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurVerticalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurVerticalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurVerticalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurVerticalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBuildBevelHeightKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBuildBevelHeightKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurBackgroundHorizontalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurBackgroundHorizontalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurBackgroundVerticalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurBackgroundVerticalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPShadowOffsetKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPShadowOffsetKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPShadowOffsetKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPShadowOffsetKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPLiquidGlassKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPLiquidGlassKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPLiquidGlassKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPLiquidGlassKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">rem Correct compilation is dependant on DXC being installed correctly, from the DirectX Shader Compiler
+if not exist "$(IntDir)DirectX_Assets" mkdir "$(IntDir)DirectX_Assets"
+del /Q "$(ProjectDir)%(Filename).i" 2&gt; nul
+"cl.exe" /nologo -D GF_DEVICE_TARGET_HLSL=1 -I"$(BOOST_BASE_PATH)" -I"..\..\..\GPUUtils" /TP /P "%(FullPath)"
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPPrepareMatteKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPPrepareMatteKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPPrepareMatteKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPPrepareMatteKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPJFASeedKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPJFASeedKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPJFASeedKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPJFASeedKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPJFAStepKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPJFAStepKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPJFAStepKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPJFAStepKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPJFAResolveKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPJFAResolveKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPJFAResolveKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPJFAResolveKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurHorizontalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurHorizontalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurVerticalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurVerticalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurVerticalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurVerticalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBuildBevelHeightKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBuildBevelHeightKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurBackgroundHorizontalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurBackgroundHorizontalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPBlurBackgroundVerticalKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPBlurBackgroundVerticalKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPShadowOffsetKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPShadowOffsetKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPShadowOffsetKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPShadowOffsetKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives
+python "..\..\..\GPUUtils\ParseHLSL.py" -i "$(ProjectDir)%(Filename).i" -o "$(IntDir)." -e KPLiquidGlassKernel
+"$(DXC_SDK_BASE_PATH)\bin\x64\dxc.exe" "$(IntDir)KPLiquidGlassKernel.hlsl" -E main -Fo "$(IntDir)DirectX_Assets\KPLiquidGlassKernel.cso" -Frs "$(IntDir)DirectX_Assets\KPLiquidGlassKernel.rs" -T cs_6_5 -enable-16bit-types -ignore-line-directives</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Preprocessing HLSL to CSO/RS for %(Filename).chlsl</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Preprocessing HLSL to CSO/RS for %(Filename).chlsl</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)%(Filename).i;$(IntDir)DirectX_Assets\KPPrepareMatteKernel.cso;$(IntDir)DirectX_Assets\KPPrepareMatteKernel.rs;$(IntDir)DirectX_Assets\KPJFASeedKernel.cso;$(IntDir)DirectX_Assets\KPJFASeedKernel.rs;$(IntDir)DirectX_Assets\KPJFAStepKernel.cso;$(IntDir)DirectX_Assets\KPJFAStepKernel.rs;$(IntDir)DirectX_Assets\KPJFAResolveKernel.cso;$(IntDir)DirectX_Assets\KPJFAResolveKernel.rs;$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.cso;$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.rs;$(IntDir)DirectX_Assets\KPBlurVerticalKernel.cso;$(IntDir)DirectX_Assets\KPBlurVerticalKernel.rs;$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.cso;$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.rs;$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.cso;$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.rs;$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.cso;$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.rs;$(IntDir)DirectX_Assets\KPShadowOffsetKernel.cso;$(IntDir)DirectX_Assets\KPShadowOffsetKernel.rs;$(IntDir)DirectX_Assets\KPLiquidGlassKernel.cso;$(IntDir)DirectX_Assets\KPLiquidGlassKernel.rs</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)%(Filename).i;$(IntDir)DirectX_Assets\KPPrepareMatteKernel.cso;$(IntDir)DirectX_Assets\KPPrepareMatteKernel.rs;$(IntDir)DirectX_Assets\KPJFASeedKernel.cso;$(IntDir)DirectX_Assets\KPJFASeedKernel.rs;$(IntDir)DirectX_Assets\KPJFAStepKernel.cso;$(IntDir)DirectX_Assets\KPJFAStepKernel.rs;$(IntDir)DirectX_Assets\KPJFAResolveKernel.cso;$(IntDir)DirectX_Assets\KPJFAResolveKernel.rs;$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.cso;$(IntDir)DirectX_Assets\KPBlurHorizontalKernel.rs;$(IntDir)DirectX_Assets\KPBlurVerticalKernel.cso;$(IntDir)DirectX_Assets\KPBlurVerticalKernel.rs;$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.cso;$(IntDir)DirectX_Assets\KPBuildBevelHeightKernel.rs;$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.cso;$(IntDir)DirectX_Assets\KPBlurBackgroundHorizontalKernel.rs;$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.cso;$(IntDir)DirectX_Assets\KPBlurBackgroundVerticalKernel.rs;$(IntDir)DirectX_Assets\KPShadowOffsetKernel.cso;$(IntDir)DirectX_Assets\KPShadowOffsetKernel.rs;$(IntDir)DirectX_Assets\KPLiquidGlassKernel.cso;$(IntDir)DirectX_Assets\KPLiquidGlassKernel.rs</Outputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(RelativeDir)\%(Filename).cu;%(AdditionalInputs)</AdditionalInputs>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(RelativeDir)\%(Filename).cu;%(AdditionalInputs)</AdditionalInputs>
+    </CustomBuild>
+    <CustomBuild Include="..\KP_LiquidGlassPiPL.r">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">cl /I "$(ProjectDir)..\..\..\Headers" /EP ".."\\"%(Filename).r" &gt; "$(IntDir)"\\"%(Filename).rr"
+"$(ProjectDir)..\..\..\Resources\PiPLTool" "$(IntDir)%(Filename).rr" "$(IntDir)%(Filename).rrc"
+cl /D "MSWindows" /EP $(IntDir)%(Filename).rrc &gt;               "$(ProjectDir)"\\"%(Filename)".rc</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cl /I "$(ProjectDir)..\..\..\Headers" /EP ".."\\"%(Filename).r" &gt; "$(IntDir)"\\"%(Filename).rr"
+"$(ProjectDir)..\..\..\Resources\PiPLTool" "$(IntDir)%(Filename).rr" "$(IntDir)%(Filename).rrc"
+cl /D "MSWindows" /EP $(IntDir)%(Filename).rrc &gt;               "$(ProjectDir)"\\"%(Filename)".rc</Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compiling the PiPL</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compiling the PiPL</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)%(Filename).rc;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)%(Filename).rc;%(Outputs)</Outputs>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="KP_LiquidGlassPiPL.rc" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

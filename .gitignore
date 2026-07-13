@@ -5,6 +5,7 @@ KP_LiquidGlass/Mac/build/
 
 # Kernel preprocessing intermediates (Windows custom build steps)
 *.i
+*.rc
 DirectX_Assets/
 
 # Xcode user state
@@ -12,12 +13,16 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 
-# Visual Studio user state (for the future Win/ project)
+# Visual Studio user state / build byproducts
 .vs/
 *.user
+*.pdb
 x64/
 ARM64/
 
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Local test/scratch — not plugin source
+Adobe After Effects Auto-Save/

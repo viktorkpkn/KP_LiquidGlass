@@ -102,19 +102,20 @@ GF_KERNEL_FUNCTION(KPPrepareMatteKernel,
         float a01 = 0.0f;
         float a11 = 0.0f;
         if (x0 >= 0 && x0 < w && y0 >= 0 && y0 < h) {
-            a00 = KPClamp(inMask[y0 * inMaskPitch + x0].w, 0.0f, 1.0f);
+            a00 = KPClamp(ReadFloat4(inMask, y0 * inMaskPitch + x0, false).w, 0.0f, 1.0f);
         }
         if (x0 + 1 >= 0 && x0 + 1 < w && y0 >= 0 && y0 < h) {
-            a10 = KPClamp(inMask[y0 * inMaskPitch + x0 + 1].w, 0.0f, 1.0f);
+            a10 = KPClamp(ReadFloat4(inMask, y0 * inMaskPitch + x0 + 1, false).w, 0.0f, 1.0f);
         }
         if (x0 >= 0 && x0 < w && y0 + 1 >= 0 && y0 + 1 < h) {
-            a01 = KPClamp(inMask[(y0 + 1) * inMaskPitch + x0].w, 0.0f, 1.0f);
+            a01 = KPClamp(ReadFloat4(inMask, (y0 + 1) * inMaskPitch + x0, false).w, 0.0f, 1.0f);
         }
         if (x0 + 1 >= 0 && x0 + 1 < w && y0 + 1 >= 0 && y0 + 1 < h) {
-            a11 = KPClamp(inMask[(y0 + 1) * inMaskPitch + x0 + 1].w, 0.0f, 1.0f);
+            a11 = KPClamp(ReadFloat4(inMask, (y0 + 1) * inMaskPitch + x0 + 1, false).w, 0.0f, 1.0f);
         }
 
-        outMatte[inXY.y * inWidth + inXY.x] = KPMix(KPMix(a00, a10, tx), KPMix(a01, a11, tx), ty);
+        WriteFloat(KPMix(KPMix(a00, a10, tx), KPMix(a01, a11, tx), ty),
+                   outMatte, (int)(inXY.y * inWidth + inXY.x), false);
     }
 }
 
@@ -137,20 +138,45 @@ GF_KERNEL_FUNCTION(KPJFASeedKernel,
         int h = (int)inHeight;
         int index = y * w + x;
 
+        float a = ReadFloat(inMatte, index, false);
         bool boundary = false;
-        if (inMatte[index] >= 0.5f)
+        float aL = 0.0f;
+        float aR = 0.0f;
+        float aU = 0.0f;
+        float aD = 0.0f;
+        if (a >= 0.5f)
         {
-            bool outL = (x > 0) ? (inMatte[index - 1] < 0.5f) : true;
-            bool outR = (x < w - 1) ? (inMatte[index + 1] < 0.5f) : true;
-            bool outU = (y > 0) ? (inMatte[index - w] < 0.5f) : true;
-            bool outD = (y < h - 1) ? (inMatte[index + w] < 0.5f) : true;
-            boundary = outL || outR || outU || outD;
+            aL = (x > 0) ? ReadFloat(inMatte, index - 1, false) : 0.0f;
+            aR = (x < w - 1) ? ReadFloat(inMatte, index + 1, false) : 0.0f;
+            aU = (y > 0) ? ReadFloat(inMatte, index - w, false) : 0.0f;
+            aD = (y < h - 1) ? ReadFloat(inMatte, index + w, false) : 0.0f;
+            boundary = (aL < 0.5f) || (aR < 0.5f) || (aU < 0.5f) || (aD < 0.5f);
         }
 
         float2 seed;
-        seed.x = boundary ? (float)x : -1.0e6f;
-        seed.y = boundary ? (float)y : -1.0e6f;
-        outSeeds[index] = seed;
+        seed.x = -1.0e6f;
+        seed.y = -1.0e6f;
+        if (boundary)
+        {
+            /* Place the seed on the 0.5 iso-line recovered from the AA
+            ** matte instead of at the integer pixel center: integer seeds
+            ** freeze between half-pixel crossings and then lurch a whole
+            ** pixel, which jitters the distance field — and displacement,
+            ** light normal and stroke with it — under sub-pixel motion. */
+            float gx = (aR - aL) * 0.5f;
+            float gy = (aD - aU) * 0.5f;
+            float g2 = gx * gx + gy * gy;
+            float ox = 0.0f;
+            float oy = 0.0f;
+            if (g2 > 0.0001f) {
+                float s = (a - 0.5f) / g2;
+                ox = KPClamp(-gx * s, -1.0f, 1.0f);
+                oy = KPClamp(-gy * s, -1.0f, 1.0f);
+            }
+            seed.x = (float)x + ox;
+            seed.y = (float)y + oy;
+        }
+        WriteFloat2(seed, outSeeds, index, false);
     }
 }
 
@@ -171,7 +197,7 @@ GF_KERNEL_FUNCTION(KPJFAStepKernel,
         int index = y * w + x;
         int step = inStep > 1 ? inStep : 1;
 
-        float2 best = inSrc[index];
+        float2 best = ReadFloat2(inSrc, index, false);
         float bestD = 1.0e30f;
         if (best.x > -1.0e5f) {
             float ddx = best.x - (float)x;
@@ -191,7 +217,7 @@ GF_KERNEL_FUNCTION(KPJFAStepKernel,
                 if (nx < 0 || ny < 0 || nx >= w || ny >= h) {
                     continue;
                 }
-                float2 cand = inSrc[ny * w + nx];
+                float2 cand = ReadFloat2(inSrc, ny * w + nx, false);
                 if (cand.x < -1.0e5f) {
                     continue;
                 }
@@ -205,7 +231,7 @@ GF_KERNEL_FUNCTION(KPJFAStepKernel,
             }
         }
 
-        outDst[index] = best;
+        WriteFloat2(best, outDst, index, false);
     }
 }
 
@@ -221,10 +247,10 @@ GF_KERNEL_FUNCTION(KPJFAResolveKernel,
     if (inXY.x < inWidth && inXY.y < inHeight)
     {
         int index = (int)inXY.y * (int)inWidth + (int)inXY.x;
-        if (inMatte[index] < 0.5f) {
-            outField[index] = 1.0f;
+        if (ReadFloat(inMatte, index, false) < 0.5f) {
+            WriteFloat(1.0f, outField, index, false);
         } else {
-            float2 best = inSeeds[index];
+            float2 best = ReadFloat2(inSeeds, index, false);
             float thickness = fmax(inThickness, 1.0f);
             float d = 1.0e6f;
             if (best.x > -1.0e5f) {
@@ -232,7 +258,7 @@ GF_KERNEL_FUNCTION(KPJFAResolveKernel,
                 float ddy = best.y - (float)inXY.y;
                 d = sqrt(ddx * ddx + ddy * ddy);
             }
-            outField[index] = KPClamp(1.0f - d / thickness, 0.0f, 1.0f);
+            WriteFloat(KPClamp(1.0f - d / thickness, 0.0f, 1.0f), outField, index, false);
         }
     }
 }
@@ -263,10 +289,10 @@ GF_KERNEL_FUNCTION(KPBlurHorizontalKernel,
             int sx = x + dx;
             sx = sx < 0 ? 0 : (sx > w - 1 ? w - 1 : sx);
             float weight = KPGaussian((float)dx, inSigma);
-            sum += inSrc[y * w + sx] * weight;
+            sum += ReadFloat(inSrc, y * w + sx, false) * weight;
             weightSum += weight;
         }
-        outDst[y * w + x] = sum / weightSum;
+        WriteFloat(sum / weightSum, outDst, y * w + x, false);
     }
 }
 
@@ -293,10 +319,10 @@ GF_KERNEL_FUNCTION(KPBlurVerticalKernel,
             int sy = y + dy;
             sy = sy < 0 ? 0 : (sy > h - 1 ? h - 1 : sy);
             float weight = KPGaussian((float)dy, inSigma);
-            sum += inSrc[sy * w + x] * weight;
+            sum += ReadFloat(inSrc, sy * w + x, false) * weight;
             weightSum += weight;
         }
-        outDst[y * w + x] = sum / weightSum;
+        WriteFloat(sum / weightSum, outDst, y * w + x, false);
     }
 }
 
@@ -317,9 +343,56 @@ GF_KERNEL_FUNCTION(KPBuildBevelHeightKernel,
         int index = (int)inXY.y * (int)inWidth + (int)inXY.x;
         float spread = KPClamp(inSpread / 100.0f, 0.0f, 1.0f);
         float k = 0.5f + spread * 3.5f;
-        float edge = KPClamp(inField[index], 0.0f, 1.0f);
+        float edge = KPClamp(ReadFloat(inField, index, false), 0.0f, 1.0f);
         float t = pow(edge, k);
-        outHeight[index] = sqrt(fmax(1.0f - t * t, 0.0f));
+        WriteFloat(sqrt(fmax(1.0f - t * t, 0.0f)), outHeight, index, false);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* 4b. Inner shadow: the matte sampled at an offset (bilinear); the     */
+/*     result is blurred by the shared gaussian kernels afterwards.     */
+/* ------------------------------------------------------------------ */
+
+GF_KERNEL_FUNCTION(KPShadowOffsetKernel,
+    ((GF_PTR_READ_ONLY(float))(inMatte))
+    ((GF_PTR(float))(outShadow)),
+    ((unsigned int)(inWidth))
+    ((unsigned int)(inHeight))
+    ((float)(inOffsetX))
+    ((float)(inOffsetY)),
+    ((uint2)(inXY)(KERNEL_XY)))
+{
+    if (inXY.x < inWidth && inXY.y < inHeight)
+    {
+        int w = (int)inWidth;
+        int h = (int)inHeight;
+        float sx = (float)inXY.x - inOffsetX;
+        float sy = (float)inXY.y - inOffsetY;
+
+        int x0 = (int)floor(sx);
+        int y0 = (int)floor(sy);
+        float tx = sx - (float)x0;
+        float ty = sy - (float)y0;
+
+        float a00 = 0.0f;
+        float a10 = 0.0f;
+        float a01 = 0.0f;
+        float a11 = 0.0f;
+        if (x0 >= 0 && x0 < w && y0 >= 0 && y0 < h) {
+            a00 = ReadFloat(inMatte, y0 * w + x0, false);
+        }
+        if (x0 + 1 >= 0 && x0 + 1 < w && y0 >= 0 && y0 < h) {
+            a10 = ReadFloat(inMatte, y0 * w + x0 + 1, false);
+        }
+        if (x0 >= 0 && x0 < w && y0 + 1 >= 0 && y0 + 1 < h) {
+            a01 = ReadFloat(inMatte, (y0 + 1) * w + x0, false);
+        }
+        if (x0 + 1 >= 0 && x0 + 1 < w && y0 + 1 >= 0 && y0 + 1 < h) {
+            a11 = ReadFloat(inMatte, (y0 + 1) * w + x0 + 1, false);
+        }
+        WriteFloat(KPMix(KPMix(a00, a10, tx), KPMix(a01, a11, tx), ty),
+                   outShadow, (int)(inXY.y * inWidth + inXY.x), false);
     }
 }
 
@@ -354,7 +427,7 @@ GF_KERNEL_FUNCTION(KPBlurBackgroundHorizontalKernel,
             int sx = x + dx;
             sx = sx < 0 ? 0 : (sx > w - 1 ? w - 1 : sx);
             float weight = KPGaussian((float)dx, inSigma);
-            float4 p = inSrc[y * inSrcPitch + sx];
+            float4 p = ReadFloat4(inSrc, y * inSrcPitch + sx, false);
             sumX += p.x * weight;
             sumY += p.y * weight;
             sumZ += p.z * weight;
@@ -366,7 +439,7 @@ GF_KERNEL_FUNCTION(KPBlurBackgroundHorizontalKernel,
         outPix.y = sumY / weightSum;
         outPix.z = sumZ / weightSum;
         outPix.w = sumW / weightSum;
-        outDst[y * inDstPitch + x] = outPix;
+        WriteFloat4(outPix, outDst, y * inDstPitch + x, false);
     }
 }
 
@@ -397,7 +470,7 @@ GF_KERNEL_FUNCTION(KPBlurBackgroundVerticalKernel,
             int sy = y + dy;
             sy = sy < 0 ? 0 : (sy > h - 1 ? h - 1 : sy);
             float weight = KPGaussian((float)dy, inSigma);
-            float4 p = inSrc[sy * inSrcPitch + x];
+            float4 p = ReadFloat4(inSrc, sy * inSrcPitch + x, false);
             sumX += p.x * weight;
             sumY += p.y * weight;
             sumZ += p.z * weight;
@@ -409,7 +482,7 @@ GF_KERNEL_FUNCTION(KPBlurBackgroundVerticalKernel,
         outPix.y = sumY / weightSum;
         outPix.z = sumZ / weightSum;
         outPix.w = sumW / weightSum;
-        outDst[y * inDstPitch + x] = outPix;
+        WriteFloat4(outPix, outDst, y * inDstPitch + x, false);
     }
 }
 
@@ -435,7 +508,7 @@ GF_DEVICE_FUNCTION float4 KPBackgroundTap(
         zero.w = 0.0f;
         return zero;
     }
-    return inSample[inY * inSamplePitch + inX];
+    return ReadFloat4(inSample, inY * inSamplePitch + inX, false);
 }
 
 GF_DEVICE_FUNCTION float4 KPSampleBilinear(
@@ -486,18 +559,62 @@ GF_DEVICE_FUNCTION float4 KPSampleDisplaced(
         return KPSampleBilinear(inSample, sx, sy, inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges);
     }
 
-    float o = inBlurRadius * 0.7071f;
+    /* 26-tap Poisson-disc with gaussian weights (center + 25). The previous
+    ** 5-tap version left visible ghost copies ("tripling") of high-contrast
+    ** content at larger radii. Local macro is expanded by the C preprocessor
+    ** before any of the kernel-generation steps, so it is safe for
+    ** CUDA/OpenCL/HLSL. */
+    float o = inBlurRadius;
     float4 c = KPSampleBilinear(inSample, sx, sy, inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges);
-    float4 c1 = KPSampleBilinear(inSample, sx + o, sy + o, inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges);
-    float4 c2 = KPSampleBilinear(inSample, sx - o, sy + o, inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges);
-    float4 c3 = KPSampleBilinear(inSample, sx + o, sy - o, inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges);
-    float4 c4 = KPSampleBilinear(inSample, sx - o, sy - o, inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges);
+    float accX = c.x;
+    float accY = c.y;
+    float accZ = c.z;
+    float accW = c.w;
+    float weightSum = 1.0f;
+
+#define KP_EDGE_TAP(OX, OY, WEIGHT) \
+    { \
+        float4 tap = KPSampleBilinear(inSample, sx + (OX) * o, sy + (OY) * o, \
+                                      inSampleWidth, inSampleHeight, inSamplePitch, inExtendEdges); \
+        accX += tap.x * (WEIGHT); \
+        accY += tap.y * (WEIGHT); \
+        accZ += tap.z * (WEIGHT); \
+        accW += tap.w * (WEIGHT); \
+        weightSum += (WEIGHT); \
+    }
+
+    KP_EDGE_TAP( 0.691238f,  0.353789f, 0.2994f)
+    KP_EDGE_TAP(-0.916361f, -0.398034f, 0.1358f)
+    KP_EDGE_TAP( 0.356088f, -0.894845f, 0.1564f)
+    KP_EDGE_TAP(-0.479510f,  0.795561f, 0.1780f)
+    KP_EDGE_TAP(-0.121922f, -0.027974f, 0.9692f)
+    KP_EDGE_TAP( 0.897908f, -0.359819f, 0.1539f)
+    KP_EDGE_TAP(-0.376753f, -0.879271f, 0.1604f)
+    KP_EDGE_TAP( 0.252976f,  0.940587f, 0.1500f)
+    KP_EDGE_TAP(-0.881660f,  0.220244f, 0.1917f)
+    KP_EDGE_TAP( 0.315311f, -0.328585f, 0.6605f)
+    KP_EDGE_TAP(-0.039054f,  0.507224f, 0.5959f)
+    KP_EDGE_TAP( 0.273669f,  0.194845f, 0.7979f)
+    KP_EDGE_TAP(-0.430749f, -0.388759f, 0.5100f)
+    KP_EDGE_TAP(-0.024568f, -0.619074f, 0.4641f)
+    KP_EDGE_TAP(-0.445267f,  0.345972f, 0.5294f)
+    KP_EDGE_TAP( 0.612813f,  0.735445f, 0.1600f)
+    KP_EDGE_TAP( 0.964306f,  0.041737f, 0.1552f)
+    KP_EDGE_TAP( 0.698508f, -0.706329f, 0.1390f)
+    KP_EDGE_TAP( 0.596281f, -0.017938f, 0.4908f)
+    KP_EDGE_TAP(-0.600695f, -0.054708f, 0.4830f)
+    KP_EDGE_TAP(-0.118511f,  0.895520f, 0.1955f)
+    KP_EDGE_TAP(-0.710748f, -0.686135f, 0.1420f)
+    KP_EDGE_TAP(-0.794526f,  0.606034f, 0.1357f)
+    KP_EDGE_TAP(-0.009264f, -0.991481f, 0.1400f)
+    KP_EDGE_TAP( 0.318821f,  0.519225f, 0.4759f)
+#undef KP_EDGE_TAP
 
     float4 outPix;
-    outPix.x = (c.x * 2.0f + c1.x + c2.x + c3.x + c4.x) / 6.0f;
-    outPix.y = (c.y * 2.0f + c1.y + c2.y + c3.y + c4.y) / 6.0f;
-    outPix.z = (c.z * 2.0f + c1.z + c2.z + c3.z + c4.z) / 6.0f;
-    outPix.w = (c.w * 2.0f + c1.w + c2.w + c3.w + c4.w) / 6.0f;
+    outPix.x = accX / weightSum;
+    outPix.y = accY / weightSum;
+    outPix.z = accZ / weightSum;
+    outPix.w = accW / weightSum;
     return outPix;
 }
 
@@ -506,11 +623,40 @@ GF_DEVICE_FUNCTION float4 KPSampleDisplaced(
 /*    tint, then the two-layer light screened on top.                  */
 /* ------------------------------------------------------------------ */
 
+/* Blend one shadow-color channel onto an unpremultiplied base channel. */
+GF_DEVICE_FUNCTION float KPShadowBlendChannel(float inBase, float inShadow, int inMode)
+{
+    if (inMode == 2) {          /* Multiply */
+        return inBase * inShadow;
+    }
+    if (inMode == 3) {          /* Screen */
+        return 1.0f - (1.0f - inBase) * (1.0f - inShadow);
+    }
+    if (inMode == 4) {          /* Overlay */
+        return inBase < 0.5f
+            ? 2.0f * inBase * inShadow
+            : 1.0f - 2.0f * (1.0f - inBase) * (1.0f - inShadow);
+    }
+    if (inMode == 5) {          /* Soft Light */
+        return (1.0f - 2.0f * inShadow) * inBase * inBase + 2.0f * inShadow * inBase;
+    }
+    if (inMode == 6) {          /* Hard Light */
+        return inShadow < 0.5f
+            ? 2.0f * inBase * inShadow
+            : 1.0f - 2.0f * (1.0f - inBase) * (1.0f - inShadow);
+    }
+    return inShadow;            /* Normal */
+}
+
 GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
     ((GF_PTR_READ_ONLY(float))(inMatte))
     ((GF_PTR_READ_ONLY(float))(inBevel))
     ((GF_PTR_READ_ONLY(float))(inHeightMap))
     ((GF_PTR_READ_ONLY(float4))(inSample))
+    ((GF_PTR_READ_ONLY(float))(inShadow))
+    ((GF_PTR_READ_ONLY(float4))(inUnder))
+    ((GF_PTR_READ_ONLY(float))(inOuterShadow))
+    ((GF_PTR_READ_ONLY(float))(inCaustics))
     ((GF_PTR(float4))(outDst)),
     ((int)(inSamplePitch))
     ((int)(inDstPitch))
@@ -546,7 +692,25 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
     ((float)(inC2S10))
     ((float)(inC2S11))
     ((float)(inC2S12))
-    ((float)(inStrokeWidth)),
+    ((float)(inStrokeWidth))
+    ((float)(inShadowR))
+    ((float)(inShadowG))
+    ((float)(inShadowB))
+    ((float)(inShadowOpacity))
+    ((int)(inShadowMode))
+    ((int)(inCompositeOnTop))
+    ((int)(inUnderPitch))
+    ((float)(inOuterShadowR))
+    ((float)(inOuterShadowG))
+    ((float)(inOuterShadowB))
+    ((float)(inOuterShadowIntensity))
+    ((int)(inOuterShadowMode))
+    ((float)(inCausticsR))
+    ((float)(inCausticsG))
+    ((float)(inCausticsB))
+    ((float)(inCausticsIntensity))
+    ((int)(inCausticsMode))
+    ((int)(inConfineToBounds)),
     ((uint2)(inXY)(KERNEL_XY)))
 {
     if (inXY.x < inWidth && inXY.y < inHeight)
@@ -557,7 +721,7 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
         int h = (int)inHeight;
         int index = y * w + x;
         int dstIndex = y * inDstPitch + x;
-        float maskAlpha = inMatte[index];
+        float maskAlpha = ReadFloat(inMatte, index, false);
 
         float4 color;
         color.x = 0.0f;
@@ -573,12 +737,12 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
             int yD = y < h - 1 ? y + 1 : h - 1;
 
             /* Displacement vector = gradient of the lens surface. */
-            float slopeX = (inHeightMap[y * w + xR] - inHeightMap[y * w + xL]) * 0.5f;
-            float slopeY = (inHeightMap[yD * w + x] - inHeightMap[yU * w + x]) * 0.5f;
+            float slopeX = (ReadFloat(inHeightMap, y * w + xR, false) - ReadFloat(inHeightMap, y * w + xL, false)) * 0.5f;
+            float slopeY = (ReadFloat(inHeightMap, yD * w + x, false) - ReadFloat(inHeightMap, yU * w + x, false)) * 0.5f;
 
             /* Outward normal for the lighting from the proximity field. */
-            float gradX = (inBevel[y * w + xR] - inBevel[y * w + xL]) * 0.5f;
-            float gradY = (inBevel[yD * w + x] - inBevel[yU * w + x]) * 0.5f;
+            float gradX = (ReadFloat(inBevel, y * w + xR, false) - ReadFloat(inBevel, y * w + xL, false)) * 0.5f;
+            float gradY = (ReadFloat(inBevel, yD * w + x, false) - ReadFloat(inBevel, yU * w + x, false)) * 0.5f;
             float gradLen2 = gradX * gradX + gradY * gradY;
             float outwardX = 0.0f;
             float outwardY = 0.0f;
@@ -594,7 +758,7 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
             float zoomedX = inZoomCenterX + (posX - inZoomCenterX) / zoom;
             float zoomedY = inZoomCenterY + (posY - inZoomCenterY) / zoom;
 
-            float hVal = inHeightMap[index];
+            float hVal = ReadFloat(inHeightMap, index, false);
             float edgeFade = KPSmoothstep(0.0f, 0.9f, maskAlpha);
             float dispX = slopeX * (inRefraction * 3.0f) * edgeFade;
             float dispY = slopeY * (inRefraction * 3.0f) * edgeFade;
@@ -632,6 +796,41 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
                                           (int)inSampleWidth, (int)inSampleHeight, inSamplePitch, inExtendEdges);
             }
 
+            /* Outer shadow & caustics live on the backdrop: sample their
+            ** fields at the REFRACTED position so the glass visibly bends
+            ** them, and blend onto the sampled background color. */
+            {
+                int fx = (int)(zoomedX + dispX - (float)inOutputLeft + 0.5f);
+                int fy = (int)(zoomedY + dispY - (float)inOutputTop + 0.5f);
+                fx = fx < 0 ? 0 : (fx > w - 1 ? w - 1 : fx);
+                fy = fy < 0 ? 0 : (fy > h - 1 ? h - 1 : fy);
+                int fIdx = fy * w + fx;
+                float sAmt = KPClamp(ReadFloat(inOuterShadow, fIdx, false), 0.0f, 1.0f)
+                           * KPClamp(inOuterShadowIntensity / 100.0f, 0.0f, 1.0f);
+                float cAmt = KPClamp(ReadFloat(inCaustics, fIdx, false), 0.0f, 1.0f)
+                           * KPClamp(inCausticsIntensity / 100.0f, 0.0f, 1.0f);
+                if ((sAmt > 0.0001f || cAmt > 0.0001f) && glass.w > 0.0001f)
+                {
+                    float invGA = 1.0f / fmax(glass.w, 0.0001f);
+                    float gB = glass.x * invGA;
+                    float gG = glass.y * invGA;
+                    float gR = glass.z * invGA;
+                    if (sAmt > 0.0001f) {
+                        gB = KPMix(gB, KPShadowBlendChannel(gB, inOuterShadowB, inOuterShadowMode), sAmt);
+                        gG = KPMix(gG, KPShadowBlendChannel(gG, inOuterShadowG, inOuterShadowMode), sAmt);
+                        gR = KPMix(gR, KPShadowBlendChannel(gR, inOuterShadowR, inOuterShadowMode), sAmt);
+                    }
+                    if (cAmt > 0.0001f) {
+                        gB = KPMix(gB, KPShadowBlendChannel(gB, inCausticsB, inCausticsMode), cAmt);
+                        gG = KPMix(gG, KPShadowBlendChannel(gG, inCausticsG, inCausticsMode), cAmt);
+                        gR = KPMix(gR, KPShadowBlendChannel(gR, inCausticsR, inCausticsMode), cAmt);
+                    }
+                    glass.x = gB * glass.w;
+                    glass.y = gG * glass.w;
+                    glass.z = gR * glass.w;
+                }
+            }
+
             /* Premultiplied coverage. */
             glass.x *= maskAlpha;
             glass.y *= maskAlpha;
@@ -647,7 +846,7 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
             color.w = tintAlpha + color.w * (1.0f - tintAlpha);
 
             /* Light: soft base + hard clear-coat stroke, screened on top. */
-            float fieldE = KPClamp(inBevel[index], 0.0f, 1.0f);
+            float fieldE = KPClamp(ReadFloat(inBevel, index, false), 0.0f, 1.0f);
             float lit = outwardX * inLightDirX + outwardY * inLightDirY;
             float intensity = KPClamp(inLightIntensity / 100.0f, 0.0f, 2.0f);
             float softBand = KPSmoothstep(0.3f, 0.9f, fieldE);
@@ -673,21 +872,105 @@ GF_KERNEL_FUNCTION(KPLiquidGlassKernel,
                 color.y = baseY * color.w;
                 color.z = baseZ * color.w;
             }
+
+            /* Inner shadow: the offset+blurred matte, clipped to the glass,
+            ** blended over the composed glass color. */
+            float shadowA = KPClamp(ReadFloat(inShadow, index, false), 0.0f, 1.0f)
+                          * KPClamp(inShadowOpacity / 100.0f, 0.0f, 1.0f) * maskAlpha;
+            if (shadowA > 0.0001f && color.w > 0.0001f)
+            {
+                float invA2 = 1.0f / fmax(color.w, 0.0001f);
+                float baseX2 = color.x * invA2;
+                float baseY2 = color.y * invA2;
+                float baseZ2 = color.z * invA2;
+                float blendX = KPShadowBlendChannel(baseX2, inShadowB, inShadowMode);
+                float blendY = KPShadowBlendChannel(baseY2, inShadowG, inShadowMode);
+                float blendZ = KPShadowBlendChannel(baseZ2, inShadowR, inShadowMode);
+                color.x = KPMix(baseX2, blendX, shadowA) * color.w;
+                color.y = KPMix(baseY2, blendY, shadowA) * color.w;
+                color.z = KPMix(baseZ2, blendZ, shadowA) * color.w;
+            }
         }
 
-        outDst[dstIndex] = color;
+        /* Outer shadow & caustics around the shape, at this pixel's own
+        ** (unrefracted) position. */
+        float ownShadowAmt = KPClamp(ReadFloat(inOuterShadow, index, false), 0.0f, 1.0f)
+                           * KPClamp(inOuterShadowIntensity / 100.0f, 0.0f, 1.0f);
+        float ownCausticAmt = KPClamp(ReadFloat(inCaustics, index, false), 0.0f, 1.0f)
+                            * KPClamp(inCausticsIntensity / 100.0f, 0.0f, 1.0f);
+
+        if (inCompositeOnTop != 0)
+        {
+            /* Adjustment-layer mode: we own the underlying, so the blends
+            ** are exact. Shadow/caustics apply to the surface, then the
+            ** glass composites over it. */
+            float pX = (float)(inOutputLeft + x);
+            float pY = (float)(inOutputTop + y);
+            float4 under = KPSampleDisplaced(inUnder, pX, pY, 0.0f,
+                                             inC2S00, inC2S01, inC2S02,
+                                             inC2S10, inC2S11, inC2S12,
+                                             inSampleLeft, inSampleTop,
+                                             (int)inSampleWidth, (int)inSampleHeight,
+                                             inUnderPitch, inExtendEdges);
+            if ((ownShadowAmt > 0.0001f || ownCausticAmt > 0.0001f) && under.w > 0.0001f)
+            {
+                float invUA = 1.0f / fmax(under.w, 0.0001f);
+                float uB = under.x * invUA;
+                float uG = under.y * invUA;
+                float uR = under.z * invUA;
+                if (ownShadowAmt > 0.0001f) {
+                    uB = KPMix(uB, KPShadowBlendChannel(uB, inOuterShadowB, inOuterShadowMode), ownShadowAmt);
+                    uG = KPMix(uG, KPShadowBlendChannel(uG, inOuterShadowG, inOuterShadowMode), ownShadowAmt);
+                    uR = KPMix(uR, KPShadowBlendChannel(uR, inOuterShadowR, inOuterShadowMode), ownShadowAmt);
+                }
+                if (ownCausticAmt > 0.0001f) {
+                    uB = KPMix(uB, KPShadowBlendChannel(uB, inCausticsB, inCausticsMode), ownCausticAmt);
+                    uG = KPMix(uG, KPShadowBlendChannel(uG, inCausticsG, inCausticsMode), ownCausticAmt);
+                    uR = KPMix(uR, KPShadowBlendChannel(uR, inCausticsR, inCausticsMode), ownCausticAmt);
+                }
+                under.x = uB * under.w;
+                under.y = uG * under.w;
+                under.z = uR * under.w;
+            }
+            color.x = color.x + under.x * (1.0f - color.w);
+            color.y = color.y + under.y * (1.0f - color.w);
+            color.z = color.z + under.z * (1.0f - color.w);
+            color.w = color.w + under.w * (1.0f - color.w);
+        }
+        else if (!inConfineToBounds && (ownShadowAmt > 0.0001f || ownCausticAmt > 0.0001f))
+        {
+            /* Shape-layer mode: we don't own the pixels below, so paint
+            ** translucent color under the glass (native Drop Shadow style):
+            ** caustics over shadow, then the glass over both. This can't
+            ** honor blend modes (no real backdrop) and shows as a duplicate
+            ** offset-and-blurred copy of the shape's own silhouette --
+            ** Confine to Layer Bounds skips it entirely instead. */
+            float paintA = ownCausticAmt + ownShadowAmt * (1.0f - ownCausticAmt);
+            float paintB = inCausticsB * ownCausticAmt + inOuterShadowB * ownShadowAmt * (1.0f - ownCausticAmt);
+            float paintG = inCausticsG * ownCausticAmt + inOuterShadowG * ownShadowAmt * (1.0f - ownCausticAmt);
+            float paintR = inCausticsR * ownCausticAmt + inOuterShadowR * ownShadowAmt * (1.0f - ownCausticAmt);
+            color.x = color.x + paintB * (1.0f - color.w);
+            color.y = color.y + paintG * (1.0f - color.w);
+            color.z = color.z + paintR * (1.0f - color.w);
+            color.w = color.w + paintA * (1.0f - color.w);
+        }
+
+        WriteFloat4(color, outDst, dstIndex, false);
     }
 }
 #endif  /* GF_DEVICE_TARGET_DEVICE */
 
 /* ------------------------------------------------------------------ */
 /* CUDA launchers (host-callable, statically linked on Windows).       */
-/* Scalar pack order for KPLiquidGlassRender_CUDA (float[18]):         */
+/* Scalar pack order for KPLiquidGlassRender_CUDA (float[22]):         */
 /*  0 refraction  1 thickness  2 zoom       3 zoomCenterX              */
 /*  4 zoomCenterY 5 edgeBlur   6 lightDirX  7 lightDirY                */
 /*  8 lightR      9 lightG    10 lightB    11 lightIntensity           */
 /* 12 tintR      13 tintG     14 tintB     15 tintOpacity              */
 /* 16 dispersion 17 strokeWidth                                        */
+/* 18 shadowR   19 shadowG   20 shadowB   21 shadowOpacity             */
+/* 22 outerShR  23 outerShG  24 outerShB  25 outerShIntensity          */
+/* 26 causticR  27 causticG  28 causticB  29 causticIntensity          */
 /* ------------------------------------------------------------------ */
 #if __NVCC__
 
@@ -777,6 +1060,16 @@ void KPBlurBackgroundHorizontal_CUDA(
         inSampleWidth, inSampleHeight, inRadius, inSigma, inSrcPitch, inDstPitch);
 }
 
+void KPShadowOffset_CUDA(
+    float const *inMatte, float *outShadow,
+    unsigned int inWidth, unsigned int inHeight,
+    float inOffsetX, float inOffsetY)
+{
+    dim3 blockDim(16, 16, 1);
+    KPShadowOffsetKernel<<<KPGrid(inWidth, inHeight, blockDim), blockDim, 0>>>(
+        inMatte, outShadow, inWidth, inHeight, inOffsetX, inOffsetY);
+}
+
 void KPBlurBackgroundVertical_CUDA(
     float const *inSrc, float *outDst,
     unsigned int inSampleWidth, unsigned int inSampleHeight,
@@ -789,19 +1082,23 @@ void KPBlurBackgroundVertical_CUDA(
 }
 
 void KPLiquidGlassRender_CUDA(
-    float const *inMatte, float const *inBevel, float const *inHeight,
-    float const *inSample, float *outDst,
+    float const *inMatte, float const *inBevel, float const *inHeightMap,
+    float const *inSample, float const *inShadow, float const *inUnder,
+    float const *inOuterShadow, float const *inCaustics, float *outDst,
     int inSamplePitch, int inDstPitch,
     unsigned int inWidth, unsigned int inHeight,
     unsigned int inSampleWidth, unsigned int inSampleHeight,
     float const *inScalars,
     int inExtendEdges,
     int inSampleLeft, int inSampleTop, int inOutputLeft, int inOutputTop,
-    float const *inC2S)
+    float const *inC2S,
+    int inShadowMode, int inCompositeOnTop, int inUnderPitch,
+    int inOuterShadowMode, int inCausticsMode, int inConfineToBounds)
 {
     dim3 blockDim(16, 16, 1);
     KPLiquidGlassKernel<<<KPGrid(inWidth, inHeight, blockDim), blockDim, 0>>>(
-        inMatte, inBevel, inHeight, (float4 const *)inSample, (float4 *)outDst,
+        inMatte, inBevel, inHeightMap, (float4 const *)inSample, inShadow,
+        (float4 const *)inUnder, inOuterShadow, inCaustics, (float4 *)outDst,
         inSamplePitch, inDstPitch, inWidth, inHeight, inSampleWidth, inSampleHeight,
         inScalars[0], inScalars[1], inScalars[2], inScalars[3], inScalars[4],
         inScalars[5], inScalars[6], inScalars[7], inScalars[8], inScalars[9],
@@ -809,7 +1106,12 @@ void KPLiquidGlassRender_CUDA(
         inScalars[15], inScalars[16],
         inExtendEdges, inSampleLeft, inSampleTop, inOutputLeft, inOutputTop,
         inC2S[0], inC2S[1], inC2S[2], inC2S[3], inC2S[4], inC2S[5],
-        inScalars[17]);
+        inScalars[17],
+        inScalars[18], inScalars[19], inScalars[20], inScalars[21],
+        inShadowMode, inCompositeOnTop, inUnderPitch,
+        inScalars[22], inScalars[23], inScalars[24], inScalars[25], inOuterShadowMode,
+        inScalars[26], inScalars[27], inScalars[28], inScalars[29], inCausticsMode,
+        inConfineToBounds);
 }
 
 #endif  /* __NVCC__ */

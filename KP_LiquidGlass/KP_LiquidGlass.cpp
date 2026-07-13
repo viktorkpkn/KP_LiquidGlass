@@ -15,12 +15,19 @@
 #include <stdarg.h>
 
 // Dev-time diagnostics; disabled for release builds.
-#define KP_LIQUIDGLASS_ENABLE_LOG 0
+#define KP_LIQUIDGLASS_ENABLE_LOG 1
 
 #if KP_LIQUIDGLASS_ENABLE_LOG
 static void KPLog(const char *format, ...)
 {
+#ifdef _WIN32
+    char path[512];
+    const char *tmp = getenv("TEMP");
+    snprintf(path, sizeof(path), "%s\\KP_LiquidGlass.log", tmp ? tmp : "C:\\tmp");
+    FILE *file = fopen(path, "a");
+#else
     FILE *file = fopen("/tmp/KP_LiquidGlass.log", "a");
+#endif
     if (!file) {
         return;
     }
@@ -94,6 +101,7 @@ static PF_Err GlobalSetup(
 static PF_Err AddCheckboxParam(
     PF_InData *in_data,
     A_long index,
+    A_long stableId,
     const char *name,
     const char *label,
     PF_Boolean defaultValue)
@@ -106,13 +114,14 @@ static PF_Err AddCheckboxParam(
     def.u.bd.value = defaultValue;
     def.u.bd.u.PF_DEF_NAMEPTR = label;
     def.flags = PF_ParamFlag_CANNOT_TIME_VARY;
-    def.uu.id = index;
+    def.uu.id = stableId;
     return PF_ADD_PARAM(in_data, index, &def);
 }
 
 static PF_Err AddFloatSliderParam(
     PF_InData *in_data,
     A_long index,
+    A_long stableId,
     const char *name,
     float validMin,
     float validMax,
@@ -134,13 +143,14 @@ static PF_Err AddFloatSliderParam(
     def.u.fs_d.precision = 1;
     def.u.fs_d.display_flags = displayFlags;
     def.u.fs_d.curve_tolerance = 0.0f;
-    def.uu.id = index;
+    def.uu.id = stableId;
     return PF_ADD_PARAM(in_data, index, &def);
 }
 
 static PF_Err AddColorParam(
     PF_InData *in_data,
     A_long index,
+    A_long stableId,
     const char *name,
     A_u_char red,
     A_u_char green,
@@ -155,13 +165,14 @@ static PF_Err AddColorParam(
     def.u.cd.dephault.green = green;
     def.u.cd.dephault.blue = blue;
     def.u.cd.value = def.u.cd.dephault;
-    def.uu.id = index;
+    def.uu.id = stableId;
     return PF_ADD_PARAM(in_data, index, &def);
 }
 
 static PF_Err AddAngleParam(
     PF_InData *in_data,
     A_long index,
+    A_long stableId,
     const char *name,
     float defaultDegrees)
 {
@@ -171,7 +182,55 @@ static PF_Err AddAngleParam(
     PF_STRCPY(def.PF_DEF_NAME, name);
     def.u.ad.dephault = (A_long)(defaultDegrees * 65536.0f);
     def.u.ad.value = def.u.ad.dephault;
-    def.uu.id = index;
+    def.uu.id = stableId;
+    return PF_ADD_PARAM(in_data, index, &def);
+}
+
+static PF_Err AddPopupParam(
+    PF_InData *in_data,
+    A_long index,
+    A_long stableId,
+    const char *name,
+    const char *choices,
+    A_short numChoices,
+    A_short defaultChoice)
+{
+    PF_ParamDef def;
+    AEFX_CLR_STRUCT(def);
+    def.param_type = PF_Param_POPUP;
+    PF_STRCPY(def.PF_DEF_NAME, name);
+    def.u.pd.num_choices = numChoices;
+    def.u.pd.dephault = defaultChoice;
+    def.u.pd.value = defaultChoice;
+    def.u.pd.u.namesptr = choices;
+    def.uu.id = stableId;
+    return PF_ADD_PARAM(in_data, index, &def);
+}
+
+static PF_Err AddGroupStartParam(
+    PF_InData *in_data,
+    A_long index,
+    A_long stableId,
+    const char *name)
+{
+    PF_ParamDef def;
+    AEFX_CLR_STRUCT(def);
+    def.param_type = PF_Param_GROUP_START;
+    PF_STRCPY(def.PF_DEF_NAME, name);
+    def.flags = PF_ParamFlag_START_COLLAPSED;
+    def.uu.id = stableId;
+    return PF_ADD_PARAM(in_data, index, &def);
+}
+
+static PF_Err AddGroupEndParam(
+    PF_InData *in_data,
+    A_long index,
+    A_long stableId)
+{
+    PF_ParamDef def;
+    AEFX_CLR_STRUCT(def);
+    def.param_type = PF_Param_GROUP_END;
+    def.uu.id = stableId;
     return PF_ADD_PARAM(in_data, index, &def);
 }
 
@@ -190,25 +249,19 @@ static PF_Err ParamsSetup(
     PF_ParamDef def;
 
     ERR(AddCheckboxParam(
-        in_data,
-        KP_LIQUIDGLASS_ADJUSTMENT_MODE,
-        "Adjustment Mode",
-        "Sample underlying layers",
-        FALSE));
+        in_data, KP_LIQUIDGLASS_ADJUSTMENT_MODE, KP_ID_ADJUSTMENT_MODE,
+        "Adjustment Mode", "Sample underlying layers", FALSE));
 
     AEFX_CLR_STRUCT(def);
     def.param_type = PF_Param_LAYER;
     PF_STRCPY(def.PF_DEF_NAME, "Background Layer");
     def.u.ld.dephault = PF_LayerDefault_NONE;
-    def.uu.id = KP_LIQUIDGLASS_BACKGROUND_LAYER;
+    def.uu.id = KP_ID_BACKGROUND_LAYER;
     ERR(PF_ADD_PARAM(in_data, KP_LIQUIDGLASS_BACKGROUND_LAYER, &def));
 
     ERR(AddCheckboxParam(
-        in_data,
-        KP_LIQUIDGLASS_EXTEND_BACKGROUND,
-        "Background Edges",
-        "Extend edge pixels",
-        FALSE));
+        in_data, KP_LIQUIDGLASS_EXTEND_BACKGROUND, KP_ID_EXTEND_BACKGROUND,
+        "Background Edges", "Extend edge pixels", FALSE));
 
     // Optional explicit matte source: enables the adjustment-layer workflow
     // (input = composite below) with the glass shape taken from any layer.
@@ -216,77 +269,176 @@ static PF_Err ParamsSetup(
     def.param_type = PF_Param_LAYER;
     PF_STRCPY(def.PF_DEF_NAME, "Glass Shape");
     def.u.ld.dephault = PF_LayerDefault_NONE;
-    def.uu.id = KP_LIQUIDGLASS_SHAPE_LAYER;
+    def.uu.id = KP_ID_SHAPE_LAYER;
     ERR(PF_ADD_PARAM(in_data, KP_LIQUIDGLASS_SHAPE_LAYER, &def));
 
+    ERR(AddCheckboxParam(
+        in_data, KP_LIQUIDGLASS_COMPOSITE_ON_TOP, KP_ID_COMPOSITE_ON_TOP,
+        "Underlying Composite", "Composite on top", FALSE));
+
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_REFRACTION, "Refraction",
+        in_data, KP_LIQUIDGLASS_REFRACTION, KP_ID_REFRACTION, "Refraction",
         REFRACTION_MIN_VALUE, REFRACTION_MAX_VALUE,
         REFRACTION_MIN_SLIDER, REFRACTION_MAX_SLIDER,
         REFRACTION_DFLT, PF_ValueDisplayFlag_PERCENT));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_SOFTNESS, "Softness",
+        in_data, KP_LIQUIDGLASS_SOFTNESS, KP_ID_SOFTNESS, "Softness",
         SOFTNESS_MIN_VALUE, SOFTNESS_MAX_VALUE,
         SOFTNESS_MIN_SLIDER, SOFTNESS_MAX_SLIDER,
         SOFTNESS_DFLT, PF_ValueDisplayFlag_NONE));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_THICKNESS, "Thickness",
+        in_data, KP_LIQUIDGLASS_THICKNESS, KP_ID_THICKNESS, "Thickness",
         THICKNESS_MIN_VALUE, THICKNESS_MAX_VALUE,
         THICKNESS_MIN_SLIDER, THICKNESS_MAX_SLIDER,
         THICKNESS_DFLT, PF_ValueDisplayFlag_NONE));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_SPREAD, "Spread",
+        in_data, KP_LIQUIDGLASS_SPREAD, KP_ID_SPREAD, "Spread",
         SPREAD_MIN_VALUE, SPREAD_MAX_VALUE,
         SPREAD_MIN_SLIDER, SPREAD_MAX_SLIDER,
         SPREAD_DFLT, PF_ValueDisplayFlag_PERCENT));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_ZOOM, "Zoom",
+        in_data, KP_LIQUIDGLASS_ZOOM, KP_ID_ZOOM, "Zoom",
         ZOOM_MIN_VALUE, ZOOM_MAX_VALUE,
         ZOOM_MIN_SLIDER, ZOOM_MAX_SLIDER,
         ZOOM_DFLT, PF_ValueDisplayFlag_PERCENT));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_EDGE_BLUR, "Edge Blur",
+        in_data, KP_LIQUIDGLASS_EDGE_BLUR, KP_ID_EDGE_BLUR, "Edge Blur",
         EDGE_BLUR_MIN_VALUE, EDGE_BLUR_MAX_VALUE,
         EDGE_BLUR_MIN_SLIDER, EDGE_BLUR_MAX_SLIDER,
         EDGE_BLUR_DFLT, PF_ValueDisplayFlag_NONE));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_STROKE_WIDTH, "Stroke Width",
-        STROKE_WIDTH_MIN_VALUE, STROKE_WIDTH_MAX_VALUE,
-        STROKE_WIDTH_MIN_SLIDER, STROKE_WIDTH_MAX_SLIDER,
-        STROKE_WIDTH_DFLT, PF_ValueDisplayFlag_NONE));
-
-    ERR(AddAngleParam(in_data, KP_LIQUIDGLASS_LIGHT_ANGLE, "Light Angle", LIGHT_ANGLE_DFLT));
-    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_LIGHT_COLOR, "Light Color", 255, 255, 255));
-    ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_LIGHT_INTENSITY, "Light Intensity",
-        LIGHT_INTENSITY_MIN_VALUE, LIGHT_INTENSITY_MAX_VALUE,
-        LIGHT_INTENSITY_MIN_SLIDER, LIGHT_INTENSITY_MAX_SLIDER,
-        LIGHT_INTENSITY_DFLT, PF_ValueDisplayFlag_PERCENT));
-
-    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_TINT_COLOR, "Tint Color", 255, 255, 255));
-    ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_TINT_OPACITY, "Tint Opacity",
-        TINT_OPACITY_MIN_VALUE, TINT_OPACITY_MAX_VALUE,
-        TINT_OPACITY_MIN_SLIDER, TINT_OPACITY_MAX_SLIDER,
-        TINT_OPACITY_DFLT, PF_ValueDisplayFlag_PERCENT));
-
-    ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_ROUGHNESS, "Roughness",
+        in_data, KP_LIQUIDGLASS_ROUGHNESS, KP_ID_ROUGHNESS, "Roughness",
         ROUGHNESS_MIN_VALUE, ROUGHNESS_MAX_VALUE,
         ROUGHNESS_MIN_SLIDER, ROUGHNESS_MAX_SLIDER,
         ROUGHNESS_DFLT, PF_ValueDisplayFlag_NONE));
 
     ERR(AddFloatSliderParam(
-        in_data, KP_LIQUIDGLASS_DISPERSION, "Dispersion",
+        in_data, KP_LIQUIDGLASS_DISPERSION, KP_ID_DISPERSION, "Dispersion",
         DISPERSION_MIN_VALUE, DISPERSION_MAX_VALUE,
         DISPERSION_MIN_SLIDER, DISPERSION_MAX_SLIDER,
         DISPERSION_DFLT, PF_ValueDisplayFlag_PERCENT));
+
+    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_TINT_COLOR, KP_ID_TINT_COLOR,
+                      "Tint Color", 255, 255, 255));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_TINT_OPACITY, KP_ID_TINT_OPACITY, "Tint Opacity",
+        TINT_OPACITY_MIN_VALUE, TINT_OPACITY_MAX_VALUE,
+        TINT_OPACITY_MIN_SLIDER, TINT_OPACITY_MAX_SLIDER,
+        TINT_OPACITY_DFLT, PF_ValueDisplayFlag_PERCENT));
+
+    // --- Lighting (collapsible) ---
+    ERR(AddGroupStartParam(in_data, KP_LIQUIDGLASS_GROUP_LIGHTING_START,
+                           KP_ID_GROUP_LIGHTING_START, "Lighting"));
+
+    ERR(AddAngleParam(in_data, KP_LIQUIDGLASS_LIGHT_ANGLE, KP_ID_LIGHT_ANGLE,
+                      "Light Angle", LIGHT_ANGLE_DFLT));
+    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_LIGHT_COLOR, KP_ID_LIGHT_COLOR,
+                      "Light Color", 255, 255, 255));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_LIGHT_INTENSITY, KP_ID_LIGHT_INTENSITY, "Light Intensity",
+        LIGHT_INTENSITY_MIN_VALUE, LIGHT_INTENSITY_MAX_VALUE,
+        LIGHT_INTENSITY_MIN_SLIDER, LIGHT_INTENSITY_MAX_SLIDER,
+        LIGHT_INTENSITY_DFLT, PF_ValueDisplayFlag_PERCENT));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_STROKE_WIDTH, KP_ID_STROKE_WIDTH, "Stroke Width",
+        STROKE_WIDTH_MIN_VALUE, STROKE_WIDTH_MAX_VALUE,
+        STROKE_WIDTH_MIN_SLIDER, STROKE_WIDTH_MAX_SLIDER,
+        STROKE_WIDTH_DFLT, PF_ValueDisplayFlag_NONE));
+
+    ERR(AddGroupEndParam(in_data, KP_LIQUIDGLASS_GROUP_LIGHTING_END,
+                         KP_ID_GROUP_LIGHTING_END));
+
+    // --- Shadows (collapsible): inner (baked drop shadow), outer shadow and
+    // caustics through the glass (shared Angle/Distance offset). ---
+    ERR(AddGroupStartParam(in_data, KP_LIQUIDGLASS_GROUP_SHADOWS_START,
+                           KP_ID_GROUP_SHADOWS_START, "Shadows"));
+
+    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_SHADOW_COLOR, KP_ID_SHADOW_COLOR,
+                      "Inner Shadow Color", 0, 0, 0));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_SHADOW_OPACITY, KP_ID_SHADOW_OPACITY, "Inner Shadow Opacity",
+        SHADOW_OPACITY_MIN_VALUE, SHADOW_OPACITY_MAX_VALUE,
+        SHADOW_OPACITY_MIN_SLIDER, SHADOW_OPACITY_MAX_SLIDER,
+        SHADOW_OPACITY_DFLT, PF_ValueDisplayFlag_PERCENT));
+    ERR(AddAngleParam(in_data, KP_LIQUIDGLASS_SHADOW_DIRECTION, KP_ID_SHADOW_DIRECTION,
+                      "Inner Shadow Direction", SHADOW_DIRECTION_DFLT));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_SHADOW_DISTANCE, KP_ID_SHADOW_DISTANCE, "Inner Shadow Distance",
+        SHADOW_DISTANCE_MIN_VALUE, SHADOW_DISTANCE_MAX_VALUE,
+        SHADOW_DISTANCE_MIN_SLIDER, SHADOW_DISTANCE_MAX_SLIDER,
+        SHADOW_DISTANCE_DFLT, PF_ValueDisplayFlag_NONE));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_SHADOW_SOFTNESS, KP_ID_SHADOW_SOFTNESS, "Inner Shadow Softness",
+        SHADOW_SOFTNESS_MIN_VALUE, SHADOW_SOFTNESS_MAX_VALUE,
+        SHADOW_SOFTNESS_MIN_SLIDER, SHADOW_SOFTNESS_MAX_SLIDER,
+        SHADOW_SOFTNESS_DFLT, PF_ValueDisplayFlag_NONE));
+    ERR(AddPopupParam(in_data, KP_LIQUIDGLASS_SHADOW_MODE, KP_ID_SHADOW_MODE,
+                      "Inner Shadow Mode",
+                      "Normal|Multiply|Screen|Overlay|Soft Light|Hard Light",
+                      KP_ShadowMode_Count, KP_ShadowMode_Multiply));
+
+    // Outer shadow/caustics can't honor blend modes outside the shape's own
+    // silhouette without real underlying pixels (shape-layer hosting, no
+    // Composite on Top) -- they fall back to painting a visible offset copy
+    // of the shape. This confines that fallback to the shape's interior.
+    ERR(AddCheckboxParam(
+        in_data, KP_LIQUIDGLASS_CONFINE_TO_BOUNDS, KP_ID_CONFINE_TO_BOUNDS,
+        "Outer Shadow / Caustics", "Confine to Layer Bounds", FALSE));
+
+    ERR(AddAngleParam(in_data, KP_LIQUIDGLASS_OUTER_ANGLE, KP_ID_OUTER_ANGLE,
+                      "Outer Direction", OUTER_ANGLE_DFLT));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_OUTER_DISTANCE, KP_ID_OUTER_DISTANCE, "Outer Distance",
+        OUTER_DISTANCE_MIN_VALUE, OUTER_DISTANCE_MAX_VALUE,
+        OUTER_DISTANCE_MIN_SLIDER, OUTER_DISTANCE_MAX_SLIDER,
+        OUTER_DISTANCE_DFLT, PF_ValueDisplayFlag_NONE));
+
+    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_OUTER_SHADOW_COLOR, KP_ID_OUTER_SHADOW_COLOR,
+                      "Outer Shadow Color", 0, 0, 0));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_OUTER_SHADOW_INTENSITY, KP_ID_OUTER_SHADOW_INTENSITY,
+        "Outer Shadow Intensity",
+        OUTER_INTENSITY_MIN_VALUE, OUTER_INTENSITY_MAX_VALUE,
+        OUTER_INTENSITY_MIN_SLIDER, OUTER_INTENSITY_MAX_SLIDER,
+        OUTER_SHADOW_INTENSITY_DFLT, PF_ValueDisplayFlag_PERCENT));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_OUTER_SHADOW_SPREAD, KP_ID_OUTER_SHADOW_SPREAD,
+        "Outer Shadow Softness",
+        OUTER_SPREAD_MIN_VALUE, OUTER_SPREAD_MAX_VALUE,
+        OUTER_SPREAD_MIN_SLIDER, OUTER_SPREAD_MAX_SLIDER,
+        OUTER_SHADOW_SPREAD_DFLT, PF_ValueDisplayFlag_NONE));
+    ERR(AddPopupParam(in_data, KP_LIQUIDGLASS_OUTER_SHADOW_MODE, KP_ID_OUTER_SHADOW_MODE,
+                      "Outer Shadow Mode",
+                      "Normal|Multiply|Screen|Overlay|Soft Light|Hard Light",
+                      KP_ShadowMode_Count, KP_ShadowMode_Multiply));
+
+    ERR(AddColorParam(in_data, KP_LIQUIDGLASS_CAUSTICS_COLOR, KP_ID_CAUSTICS_COLOR,
+                      "Caustics Color", 255, 255, 255));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_CAUSTICS_INTENSITY, KP_ID_CAUSTICS_INTENSITY,
+        "Caustics Intensity",
+        OUTER_INTENSITY_MIN_VALUE, OUTER_INTENSITY_MAX_VALUE,
+        OUTER_INTENSITY_MIN_SLIDER, OUTER_INTENSITY_MAX_SLIDER,
+        CAUSTICS_INTENSITY_DFLT, PF_ValueDisplayFlag_PERCENT));
+    ERR(AddFloatSliderParam(
+        in_data, KP_LIQUIDGLASS_CAUSTICS_SPREAD, KP_ID_CAUSTICS_SPREAD,
+        "Caustics Softness",
+        OUTER_SPREAD_MIN_VALUE, OUTER_SPREAD_MAX_VALUE,
+        OUTER_SPREAD_MIN_SLIDER, OUTER_SPREAD_MAX_SLIDER,
+        CAUSTICS_SPREAD_DFLT, PF_ValueDisplayFlag_NONE));
+    ERR(AddPopupParam(in_data, KP_LIQUIDGLASS_CAUSTICS_MODE, KP_ID_CAUSTICS_MODE,
+                      "Caustics Mode",
+                      "Normal|Multiply|Screen|Overlay|Soft Light|Hard Light",
+                      KP_ShadowMode_Count, KP_ShadowMode_Overlay));
+
+    ERR(AddGroupEndParam(in_data, KP_LIQUIDGLASS_GROUP_SHADOWS_END,
+                         KP_ID_GROUP_SHADOWS_END));
 
     out_data->num_params = KP_LIQUIDGLASS_NUM_PARAMS;
     return err;
@@ -313,6 +465,7 @@ enum {
     KP_DXShader_BuildBevelHeight,
     KP_DXShader_BlurBackgroundHorizontal,
     KP_DXShader_BlurBackgroundVertical,
+    KP_DXShader_ShadowOffset,
     KP_DXShader_Render,
     KP_DXShader_Count
 };
@@ -327,6 +480,7 @@ static const wchar_t *kKP_DXShaderNames[KP_DXShader_Count] = {
     L"KPBuildBevelHeightKernel",
     L"KPBlurBackgroundHorizontalKernel",
     L"KPBlurBackgroundVerticalKernel",
+    L"KPShadowOffsetKernel",
     L"KPLiquidGlassKernel"
 };
 
@@ -351,6 +505,7 @@ enum {
     KP_MetalPipeline_BlurHorizontal,
     KP_MetalPipeline_BlurVertical,
     KP_MetalPipeline_BuildBevelHeight,
+    KP_MetalPipeline_ShadowOffset,
     KP_MetalPipeline_BlurBackgroundHorizontal,
     KP_MetalPipeline_BlurBackgroundVertical,
     KP_MetalPipeline_Render,
@@ -365,6 +520,7 @@ static const char *kKP_MetalKernelNames[KP_MetalPipeline_Count] = {
     "BlurHorizontalKernel",
     "BlurVerticalKernel",
     "BuildBevelHeightKernel",
+    "ShadowOffsetKernel",
     "BlurBackgroundHorizontalKernel",
     "BlurBackgroundVerticalKernel",
     "LiquidGlassKernel"
@@ -449,6 +605,30 @@ struct KP_LiquidGlassGuidState
     float compToSample10;
     float compToSample11;
     float compToSample12;
+    A_long compositeOnTop;
+    A_long shadowMode;
+    float shadowRed;
+    float shadowGreen;
+    float shadowBlue;
+    float shadowOpacity;
+    float shadowOffsetX;
+    float shadowOffsetY;
+    float shadowSoftness;
+    A_long outerShadowMode;
+    A_long causticsMode;
+    float outerOffsetX;
+    float outerOffsetY;
+    float outerShadowRed;
+    float outerShadowGreen;
+    float outerShadowBlue;
+    float outerShadowIntensity;
+    float outerShadowSpread;
+    float causticsRed;
+    float causticsGreen;
+    float causticsBlue;
+    float causticsIntensity;
+    float causticsSpread;
+    A_long confineToBounds;
 };
 
 static PF_Err MixRenderStateIntoGuid(
@@ -497,9 +677,33 @@ static PF_Err MixRenderStateIntoGuid(
     guidState.compToSample00 = renderParams->compToSample00;
     guidState.compToSample01 = renderParams->compToSample01;
     guidState.compToSample02 = renderParams->compToSample02;
+    guidState.compositeOnTop = renderParams->compositeOnTop;
+    guidState.shadowMode = renderParams->shadowMode;
+    guidState.shadowRed = renderParams->shadowRed;
+    guidState.shadowGreen = renderParams->shadowGreen;
+    guidState.shadowBlue = renderParams->shadowBlue;
+    guidState.shadowOpacity = renderParams->shadowOpacity;
+    guidState.shadowOffsetX = renderParams->shadowOffsetX;
+    guidState.shadowOffsetY = renderParams->shadowOffsetY;
+    guidState.shadowSoftness = renderParams->shadowSoftness;
     guidState.compToSample10 = renderParams->compToSample10;
     guidState.compToSample11 = renderParams->compToSample11;
     guidState.compToSample12 = renderParams->compToSample12;
+    guidState.outerShadowMode = renderParams->outerShadowMode;
+    guidState.causticsMode = renderParams->causticsMode;
+    guidState.outerOffsetX = renderParams->outerOffsetX;
+    guidState.outerOffsetY = renderParams->outerOffsetY;
+    guidState.outerShadowRed = renderParams->outerShadowRed;
+    guidState.outerShadowGreen = renderParams->outerShadowGreen;
+    guidState.outerShadowBlue = renderParams->outerShadowBlue;
+    guidState.outerShadowIntensity = renderParams->outerShadowIntensity;
+    guidState.outerShadowSpread = renderParams->outerShadowSpread;
+    guidState.causticsRed = renderParams->causticsRed;
+    guidState.causticsGreen = renderParams->causticsGreen;
+    guidState.causticsBlue = renderParams->causticsBlue;
+    guidState.causticsIntensity = renderParams->causticsIntensity;
+    guidState.causticsSpread = renderParams->causticsSpread;
+    guidState.confineToBounds = renderParams->confineToBounds;
 
     return extra->cb->GuidMixInPtr(
         in_data->effect_ref,
@@ -819,6 +1023,51 @@ static PF_Err PreRender(
     ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_ROUGHNESS, &renderParams->roughness));
     ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_DISPERSION, &renderParams->dispersion));
 
+    ERR(CheckoutCheckbox(in_data, out_data, KP_LIQUIDGLASS_COMPOSITE_ON_TOP, &renderParams->compositeOnTop));
+    ERR(CheckoutCheckbox(in_data, out_data, KP_LIQUIDGLASS_CONFINE_TO_BOUNDS, &renderParams->confineToBounds));
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_SHADOW_OPACITY, &renderParams->shadowOpacity));
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_SHADOW_SOFTNESS, &renderParams->shadowSoftness));
+
+    float shadowDistance = 0.0f;
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_SHADOW_DISTANCE, &shadowDistance));
+
+    if (!err) {
+        PF_ParamDef shadowDirParam;
+        AEFX_CLR_STRUCT(shadowDirParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_SHADOW_DIRECTION, &shadowDirParam));
+        if (!err) {
+            // Same convention as the native Drop Shadow: 0 degrees moves the
+            // shadow straight up, clockwise positive.
+            const float degrees = shadowDirParam.u.ad.value / 65536.0f;
+            const float radians = degrees * 3.14159265f / 180.0f;
+            renderParams->shadowOffsetX = sinf(radians) * shadowDistance;
+            renderParams->shadowOffsetY = -cosf(radians) * shadowDistance;
+            ERR2(CheckinParamValue(in_data, &shadowDirParam));
+        }
+    }
+
+    if (!err) {
+        PF_ParamDef shadowColorParam;
+        AEFX_CLR_STRUCT(shadowColorParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_SHADOW_COLOR, &shadowColorParam));
+        if (!err) {
+            renderParams->shadowRed = ColorByteToFloat(shadowColorParam.u.cd.value.red);
+            renderParams->shadowGreen = ColorByteToFloat(shadowColorParam.u.cd.value.green);
+            renderParams->shadowBlue = ColorByteToFloat(shadowColorParam.u.cd.value.blue);
+            ERR2(CheckinParamValue(in_data, &shadowColorParam));
+        }
+    }
+
+    if (!err) {
+        PF_ParamDef shadowModeParam;
+        AEFX_CLR_STRUCT(shadowModeParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_SHADOW_MODE, &shadowModeParam));
+        if (!err) {
+            renderParams->shadowMode = shadowModeParam.u.pd.value;
+            ERR2(CheckinParamValue(in_data, &shadowModeParam));
+        }
+    }
+
     if (!err) {
         PF_ParamDef lightAngleParam;
         AEFX_CLR_STRUCT(lightAngleParam);
@@ -858,6 +1107,72 @@ static PF_Err PreRender(
         }
     }
 
+    // 1.0.0b10: outer shadow & caustics, sharing one Angle/Distance offset.
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_OUTER_SHADOW_INTENSITY, &renderParams->outerShadowIntensity));
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_OUTER_SHADOW_SPREAD, &renderParams->outerShadowSpread));
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_CAUSTICS_INTENSITY, &renderParams->causticsIntensity));
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_CAUSTICS_SPREAD, &renderParams->causticsSpread));
+
+    float outerDistance = 0.0f;
+    ERR(CheckoutFloatSlider(in_data, out_data, KP_LIQUIDGLASS_OUTER_DISTANCE, &outerDistance));
+
+    if (!err) {
+        PF_ParamDef outerAngleParam;
+        AEFX_CLR_STRUCT(outerAngleParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_OUTER_ANGLE, &outerAngleParam));
+        if (!err) {
+            const float degrees = outerAngleParam.u.ad.value / 65536.0f;
+            const float radians = degrees * 3.14159265f / 180.0f;
+            renderParams->outerOffsetX = sinf(radians) * outerDistance;
+            renderParams->outerOffsetY = -cosf(radians) * outerDistance;
+            ERR2(CheckinParamValue(in_data, &outerAngleParam));
+        }
+    }
+
+    if (!err) {
+        PF_ParamDef outerShadowColorParam;
+        AEFX_CLR_STRUCT(outerShadowColorParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_OUTER_SHADOW_COLOR, &outerShadowColorParam));
+        if (!err) {
+            renderParams->outerShadowRed = ColorByteToFloat(outerShadowColorParam.u.cd.value.red);
+            renderParams->outerShadowGreen = ColorByteToFloat(outerShadowColorParam.u.cd.value.green);
+            renderParams->outerShadowBlue = ColorByteToFloat(outerShadowColorParam.u.cd.value.blue);
+            ERR2(CheckinParamValue(in_data, &outerShadowColorParam));
+        }
+    }
+
+    if (!err) {
+        PF_ParamDef outerShadowModeParam;
+        AEFX_CLR_STRUCT(outerShadowModeParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_OUTER_SHADOW_MODE, &outerShadowModeParam));
+        if (!err) {
+            renderParams->outerShadowMode = outerShadowModeParam.u.pd.value;
+            ERR2(CheckinParamValue(in_data, &outerShadowModeParam));
+        }
+    }
+
+    if (!err) {
+        PF_ParamDef causticsColorParam;
+        AEFX_CLR_STRUCT(causticsColorParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_CAUSTICS_COLOR, &causticsColorParam));
+        if (!err) {
+            renderParams->causticsRed = ColorByteToFloat(causticsColorParam.u.cd.value.red);
+            renderParams->causticsGreen = ColorByteToFloat(causticsColorParam.u.cd.value.green);
+            renderParams->causticsBlue = ColorByteToFloat(causticsColorParam.u.cd.value.blue);
+            ERR2(CheckinParamValue(in_data, &causticsColorParam));
+        }
+    }
+
+    if (!err) {
+        PF_ParamDef causticsModeParam;
+        AEFX_CLR_STRUCT(causticsModeParam);
+        ERR(CheckoutParamValue(in_data, out_data, KP_LIQUIDGLASS_CAUSTICS_MODE, &causticsModeParam));
+        if (!err) {
+            renderParams->causticsMode = causticsModeParam.u.pd.value;
+            ERR2(CheckinParamValue(in_data, &causticsModeParam));
+        }
+    }
+
     // Registering the layer params keeps AE's dependency tracking aware of
     // them even on frames where their pixels end up not being used.
     if (!err) {
@@ -891,6 +1206,13 @@ static PF_Err PreRender(
     renderParams->roughness *= downsampleX;
     renderParams->edgeBlur *= downsampleX;
     renderParams->strokeWidth *= downsampleX;
+    renderParams->shadowOffsetX *= downsampleX;
+    renderParams->shadowOffsetY *= downsampleY;
+    renderParams->shadowSoftness *= downsampleX;
+    renderParams->outerOffsetX *= downsampleX;
+    renderParams->outerOffsetY *= downsampleY;
+    renderParams->outerShadowSpread *= downsampleX;
+    renderParams->causticsSpread *= downsampleX;
 
     // The output rect is padded beyond the request; AE requires this flag for
     // result_rect to legally exceed the request rect. (GPU_RENDER_POSSIBLE is
@@ -929,8 +1251,15 @@ static PF_Err PreRender(
         // The glass pipeline itself needs working margin: the bevel-field and
         // profile blurs clamp at the buffer edges, so without this margin the
         // displacement collapses along the output bounds (seen as "no glass on
-        // the top/left when decoration pads were zero" before this fix).
-        const A_long margin = A_long(ceilf(renderParams->thickness + renderParams->softness)) + 4;
+        // the top/left when decoration pads were zero" before this fix). The
+        // outer shadow and caustics reach further out still: their field
+        // chain needs the shared offset plus their own blur radius covered.
+        const float innerReach = renderParams->thickness + renderParams->softness;
+        const float outerOffsetMag = sqrtf(renderParams->outerOffsetX * renderParams->outerOffsetX +
+                                            renderParams->outerOffsetY * renderParams->outerOffsetY);
+        const float outerSpreadMax = fmaxf(renderParams->outerShadowSpread, renderParams->causticsSpread);
+        const float outerReach = outerOffsetMag + outerSpreadMax;
+        const A_long margin = A_long(ceilf(fmaxf(innerReach, outerReach))) + 4;
 
         PF_LRect expandedRect = inputResult.result_rect;
         expandedRect.left -= margin;
@@ -1119,7 +1448,9 @@ static PF_Err GPUDeviceSetup(
     if (err) {
         return err;
     }
-    if (!deviceInfo.devicePV) {
+    // For CUDA, devicePV holds a CUdevice — an integer handle that is 0 for
+    // the primary GPU — so the null-check must not gate the CUDA branch.
+    if (extra->input->what_gpu != PF_GPU_Framework_CUDA && !deviceInfo.devicePV) {
         return PF_Err_INTERNAL_STRUCT_DAMAGED;
     }
 
@@ -1444,7 +1775,11 @@ static PF_Err KPAllocScratch(
 }
 
 // Scalar pack for the render kernel; order documented in the kernel file.
-static void KPFillRenderScalars(const LiquidGlassKernelParams &kp, float outScalars[18])
+// The shadow entries come from renderParams: the kernel-params struct is
+// Metal-mirrored and must not grow on this side.
+static void KPFillRenderScalars(const LiquidGlassKernelParams &kp,
+                                const LiquidGlassRenderParams *renderParams,
+                                float outScalars[30])
 {
     outScalars[0] = kp.refraction;
     outScalars[1] = kp.thickness;
@@ -1464,6 +1799,18 @@ static void KPFillRenderScalars(const LiquidGlassKernelParams &kp, float outScal
     outScalars[15] = kp.tintOpacity;
     outScalars[16] = kp.dispersion;
     outScalars[17] = kp.strokeWidth;
+    outScalars[18] = renderParams->shadowRed;
+    outScalars[19] = renderParams->shadowGreen;
+    outScalars[20] = renderParams->shadowBlue;
+    outScalars[21] = renderParams->shadowOpacity;
+    outScalars[22] = renderParams->outerShadowRed;
+    outScalars[23] = renderParams->outerShadowGreen;
+    outScalars[24] = renderParams->outerShadowBlue;
+    outScalars[25] = renderParams->outerShadowIntensity;
+    outScalars[26] = renderParams->causticsRed;
+    outScalars[27] = renderParams->causticsGreen;
+    outScalars[28] = renderParams->causticsBlue;
+    outScalars[29] = renderParams->causticsIntensity;
 }
 #endif
 
@@ -1490,9 +1837,10 @@ static PF_Err SmartRenderGPU_CUDA(
         kPFGPUDeviceSuiteVersion1,
         out_data);
 
-    // 0 matte, 1 bevel, 2 height, 3 scratchA, 4 scratchB, 5 jfaA, 6 jfaB
-    KPScratch scratch[7] = {};
-    for (int i = 0; i < 7 && !err; ++i) {
+    // 0 matte, 1 bevel, 2 height, 3 scratchA, 4 scratchB, 5 jfaA, 6 jfaB,
+    // 7 outer shadow field, 8 caustics field
+    KPScratch scratch[9] = {};
+    for (int i = 0; i < 9 && !err; ++i) {
         ERR(KPAllocScratch(in_data, extra, gpuSuite, outputWorld,
                            (A_long)kp.width, (A_long)kp.height, &scratch[i]));
     }
@@ -1517,8 +1865,8 @@ static PF_Err SmartRenderGPU_CUDA(
                                kp.compToMask10, kp.compToMask11, kp.compToMask12 };
         const float c2s[6] = { kp.compToSample00, kp.compToSample01, kp.compToSample02,
                                kp.compToSample10, kp.compToSample11, kp.compToSample12 };
-        float scalars[18];
-        KPFillRenderScalars(kp, scalars);
+        float scalars[30];
+        KPFillRenderScalars(kp, renderParams, scalars);
 
         KPPrepareMatte_CUDA((const float *)maskMemory, matte,
                             kp.maskPitch, kp.maskWidth, kp.maskHeight, kp.width, kp.height,
@@ -1544,6 +1892,39 @@ static PF_Err SmartRenderGPU_CUDA(
         KPBlurHorizontal_CUDA(scratchA, scratchB, kp.width, kp.height, softnessPass.radius, softnessPass.sigma);
         KPBlurVertical_CUDA(scratchB, height, kp.width, kp.height, softnessPass.radius, softnessPass.sigma);
 
+        // Inner shadow field: matte shifted, then blurred by the shared
+        // gaussians. The JFA ping-pong buffers are free by now; the final
+        // shadow lives in the one the composite kernel reads. With opacity
+        // at zero the kernel ignores the buffer entirely.
+        float *shadow = jfaNext;
+        if (renderParams->shadowOpacity > 0.01f) {
+            KPShadowOffset_CUDA(matte, scratchA, kp.width, kp.height,
+                                renderParams->shadowOffsetX, renderParams->shadowOffsetY);
+            const LiquidGlassPassParams shadowPass = MakeBlurPass(fmaxf(renderParams->shadowSoftness * 0.5f, 1.0f));
+            KPBlurHorizontal_CUDA(scratchA, scratchB, kp.width, kp.height, shadowPass.radius, shadowPass.sigma);
+            KPBlurVertical_CUDA(scratchB, shadow, kp.width, kp.height, shadowPass.radius, shadowPass.sigma);
+        }
+
+        // Outer shadow & caustics fields: matte shifted by the shared
+        // Angle/Distance offset, blurred by each effect's own Softness.
+        // scratchA/scratchB are free again (the inner shadow chain is done).
+        float *outerShadowField = (float *)scratch[7].memory;
+        float *causticsField = (float *)scratch[8].memory;
+        if (renderParams->outerShadowIntensity > 0.01f) {
+            KPShadowOffset_CUDA(matte, scratchA, kp.width, kp.height,
+                                renderParams->outerOffsetX, renderParams->outerOffsetY);
+            const LiquidGlassPassParams outerPass = MakeBlurPass(fmaxf(renderParams->outerShadowSpread * 0.5f, 1.0f));
+            KPBlurHorizontal_CUDA(scratchA, scratchB, kp.width, kp.height, outerPass.radius, outerPass.sigma);
+            KPBlurVertical_CUDA(scratchB, outerShadowField, kp.width, kp.height, outerPass.radius, outerPass.sigma);
+        }
+        if (renderParams->causticsIntensity > 0.01f) {
+            KPShadowOffset_CUDA(matte, scratchA, kp.width, kp.height,
+                                renderParams->outerOffsetX, renderParams->outerOffsetY);
+            const LiquidGlassPassParams causticsPass = MakeBlurPass(fmaxf(renderParams->causticsSpread * 0.5f, 1.0f));
+            KPBlurHorizontal_CUDA(scratchA, scratchB, kp.width, kp.height, causticsPass.radius, causticsPass.sigma);
+            KPBlurVertical_CUDA(scratchB, causticsField, kp.width, kp.height, causticsPass.radius, causticsPass.sigma);
+        }
+
         const float *samplePtr = (const float *)sampleMemory;
         int samplePitch = (int)(sampleWorld->rowbytes / sizeof(PF_PixelFloat));
         if (blurBackground) {
@@ -1560,19 +1941,37 @@ static PF_Err SmartRenderGPU_CUDA(
             samplePitch = bgPitch1;
         }
 
-        KPLiquidGlassRender_CUDA(matte, bevel, height, samplePtr, (float *)outputMemory,
+        const int compositeOnTop =
+            (renderParams->adjustmentMode && renderParams->compositeOnTop) ? 1 : 0;
+        const int underPitch = (int)(sampleWorld->rowbytes / sizeof(PF_PixelFloat));
+        KPLiquidGlassRender_CUDA(matte, bevel, height, samplePtr, shadow,
+                                 (const float *)sampleMemory, outerShadowField, causticsField,
+                                 (float *)outputMemory,
                                  samplePitch, kp.dstPitch,
                                  kp.width, kp.height, kp.sampleWidth, kp.sampleHeight,
                                  scalars, kp.extendBackground,
-                                 kp.sampleLeft, kp.sampleTop, kp.outputLeft, kp.outputTop, c2s);
+                                 kp.sampleLeft, kp.sampleTop, kp.outputLeft, kp.outputTop, c2s,
+                                 (int)renderParams->shadowMode, compositeOnTop, underPitch,
+                                 (int)renderParams->outerShadowMode, (int)renderParams->causticsMode,
+                                 renderParams->confineToBounds ? 1 : 0);
 
-        cudaDeviceSynchronize();
-        if (cudaPeekAtLastError() != cudaSuccess) {
+        cudaError_t syncErr = cudaDeviceSynchronize();
+        cudaError_t lastErr = cudaPeekAtLastError();
+        if (syncErr != cudaSuccess || lastErr != cudaSuccess) {
+            KPLog("SmartRenderGPU_CUDA FAILED sync=%d last=%d (%s)",
+                  (int)syncErr, (int)lastErr,
+                  cudaGetErrorString(lastErr != cudaSuccess ? lastErr : syncErr));
             err = PF_Err_INTERNAL_STRUCT_DAMAGED;
+        } else {
+            KPLog("SmartRenderGPU_CUDA OK %ux%u sample=%ux%u", kp.width, kp.height,
+                  kp.sampleWidth, kp.sampleHeight);
         }
     }
+    if (err) {
+        KPLog("SmartRenderGPU_CUDA exit err=%ld", (long)err);
+    }
 
-    for (int i = 0; i < 7; ++i) {
+    for (int i = 0; i < 9; ++i) {
         if (scratch[i].world) {
             gpuSuite->DisposeGPUWorld(in_data->effect_ref, scratch[i].world);
         }
@@ -1619,9 +2018,10 @@ static PF_Err SmartRenderGPU_DirectX(
         kPFGPUDeviceSuiteVersion1,
         out_data);
 
-    // 0 matte, 1 bevel, 2 height, 3 scratchA, 4 scratchB, 5 jfaA, 6 jfaB
-    KPScratch scratch[7] = {};
-    for (int i = 0; i < 7 && !err; ++i) {
+    // 0 matte, 1 bevel, 2 height, 3 scratchA, 4 scratchB, 5 jfaA, 6 jfaB,
+    // 7 outer shadow field, 8 caustics field
+    KPScratch scratch[9] = {};
+    for (int i = 0; i < 9 && !err; ++i) {
         ERR(KPAllocScratch(in_data, extra, gpuSuite, outputWorld,
                            (A_long)kp.width, (A_long)kp.height, &scratch[i]));
     }
@@ -1764,6 +2164,145 @@ static PF_Err SmartRenderGPU_DirectX(
         DX_ERR(exec.Execute(gridX, gridY));
     }
 
+    // Inner shadow field: offset matte -> scratchA, blur -> scratch[6]
+    // (the JFA buffers are free after the resolve). Skipped at zero opacity;
+    // the composite kernel ignores the buffer in that case.
+    if (!err && renderParams->shadowOpacity > 0.01f) {
+        const LiquidGlassPassParams shadowPass =
+            MakeBlurPass(fmaxf(renderParams->shadowSoftness * 0.5f, 1.0f));
+        {
+            KPShadowOffsetParamsDX shadowParams;
+            shadowParams.width = kp.width;
+            shadowParams.height = kp.height;
+            shadowParams.offsetX = renderParams->shadowOffsetX;
+            shadowParams.offsetY = renderParams->shadowOffsetY;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_ShadowOffset], 3);
+            DX_ERR(exec.SetParamBuffer(&shadowParams, sizeof(shadowParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[3].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[0].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+        if (!err) {
+            KPBlurParamsDX blurParams;
+            blurParams.width = kp.width;
+            blurParams.height = kp.height;
+            blurParams.radius = shadowPass.radius;
+            blurParams.sigma = shadowPass.sigma;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_BlurHorizontal], 3);
+            DX_ERR(exec.SetParamBuffer(&blurParams, sizeof(blurParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[4].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[3].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+        if (!err) {
+            KPBlurParamsDX blurParams;
+            blurParams.width = kp.width;
+            blurParams.height = kp.height;
+            blurParams.radius = shadowPass.radius;
+            blurParams.sigma = shadowPass.sigma;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_BlurVertical], 3);
+            DX_ERR(exec.SetParamBuffer(&blurParams, sizeof(blurParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[6].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[4].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+    }
+
+    // Outer shadow & caustics fields: offset matte -> scratchA, blur -> the
+    // dedicated scratch[7]/scratch[8] buffers. scratchA/scratchB are free
+    // again (the inner shadow chain above is done). Both share the same
+    // Angle/Distance offset; each has its own Softness (blur radius).
+    if (!err && renderParams->outerShadowIntensity > 0.01f) {
+        const LiquidGlassPassParams outerPass =
+            MakeBlurPass(fmaxf(renderParams->outerShadowSpread * 0.5f, 1.0f));
+        {
+            KPShadowOffsetParamsDX offsetParams;
+            offsetParams.width = kp.width;
+            offsetParams.height = kp.height;
+            offsetParams.offsetX = renderParams->outerOffsetX;
+            offsetParams.offsetY = renderParams->outerOffsetY;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_ShadowOffset], 3);
+            DX_ERR(exec.SetParamBuffer(&offsetParams, sizeof(offsetParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[3].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[0].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+        if (!err) {
+            KPBlurParamsDX blurParams;
+            blurParams.width = kp.width;
+            blurParams.height = kp.height;
+            blurParams.radius = outerPass.radius;
+            blurParams.sigma = outerPass.sigma;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_BlurHorizontal], 3);
+            DX_ERR(exec.SetParamBuffer(&blurParams, sizeof(blurParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[4].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[3].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+        if (!err) {
+            KPBlurParamsDX blurParams;
+            blurParams.width = kp.width;
+            blurParams.height = kp.height;
+            blurParams.radius = outerPass.radius;
+            blurParams.sigma = outerPass.sigma;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_BlurVertical], 3);
+            DX_ERR(exec.SetParamBuffer(&blurParams, sizeof(blurParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[7].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[4].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+    }
+
+    if (!err && renderParams->causticsIntensity > 0.01f) {
+        const LiquidGlassPassParams causticsPass =
+            MakeBlurPass(fmaxf(renderParams->causticsSpread * 0.5f, 1.0f));
+        {
+            KPShadowOffsetParamsDX offsetParams;
+            offsetParams.width = kp.width;
+            offsetParams.height = kp.height;
+            offsetParams.offsetX = renderParams->outerOffsetX;
+            offsetParams.offsetY = renderParams->outerOffsetY;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_ShadowOffset], 3);
+            DX_ERR(exec.SetParamBuffer(&offsetParams, sizeof(offsetParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[3].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[0].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+        if (!err) {
+            KPBlurParamsDX blurParams;
+            blurParams.width = kp.width;
+            blurParams.height = kp.height;
+            blurParams.radius = causticsPass.radius;
+            blurParams.sigma = causticsPass.sigma;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_BlurHorizontal], 3);
+            DX_ERR(exec.SetParamBuffer(&blurParams, sizeof(blurParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[4].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[3].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+        if (!err) {
+            KPBlurParamsDX blurParams;
+            blurParams.width = kp.width;
+            blurParams.height = kp.height;
+            blurParams.radius = causticsPass.radius;
+            blurParams.sigma = causticsPass.sigma;
+
+            DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_BlurVertical], 3);
+            DX_ERR(exec.SetParamBuffer(&blurParams, sizeof(blurParams)));
+            DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)scratch[8].memory, scalarBytes));
+            DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[4].memory, scalarBytes));
+            DX_ERR(exec.Execute(gridX, gridY));
+        }
+    }
+
     void *renderSampleMemory = sampleMemory;
     int renderSamplePitch = (int)(sampleWorld->rowbytes / sizeof(PF_PixelFloat));
     UINT renderSampleBytes = sampleBytes;
@@ -1820,8 +2359,8 @@ static PF_Err SmartRenderGPU_DirectX(
         renderParamsDX.height = kp.height;
         renderParamsDX.sampleWidth = kp.sampleWidth;
         renderParamsDX.sampleHeight = kp.sampleHeight;
-        float scalars[18];
-        KPFillRenderScalars(kp, scalars);
+        float scalars[30];
+        KPFillRenderScalars(kp, renderParams, scalars);
         renderParamsDX.refraction = scalars[0];
         renderParamsDX.thickness = scalars[1];
         renderParamsDX.zoom = scalars[2];
@@ -1851,18 +2390,41 @@ static PF_Err SmartRenderGPU_DirectX(
         renderParamsDX.c2s[3] = kp.compToSample10;
         renderParamsDX.c2s[4] = kp.compToSample11;
         renderParamsDX.c2s[5] = kp.compToSample12;
+        renderParamsDX.shadowR = renderParams->shadowRed;
+        renderParamsDX.shadowG = renderParams->shadowGreen;
+        renderParamsDX.shadowB = renderParams->shadowBlue;
+        renderParamsDX.shadowOpacity = renderParams->shadowOpacity;
+        renderParamsDX.shadowMode = (int)renderParams->shadowMode;
+        renderParamsDX.compositeOnTop =
+            (renderParams->adjustmentMode && renderParams->compositeOnTop) ? 1 : 0;
+        renderParamsDX.underPitch = (int)(sampleWorld->rowbytes / sizeof(PF_PixelFloat));
+        renderParamsDX.outerShadowR = scalars[22];
+        renderParamsDX.outerShadowG = scalars[23];
+        renderParamsDX.outerShadowB = scalars[24];
+        renderParamsDX.outerShadowIntensity = scalars[25];
+        renderParamsDX.outerShadowMode = (int)renderParams->outerShadowMode;
+        renderParamsDX.causticsR = scalars[26];
+        renderParamsDX.causticsG = scalars[27];
+        renderParamsDX.causticsB = scalars[28];
+        renderParamsDX.causticsIntensity = scalars[29];
+        renderParamsDX.causticsMode = (int)renderParams->causticsMode;
+        renderParamsDX.confineToBounds = renderParams->confineToBounds ? 1 : 0;
 
-        DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_Render], 6);
+        DXShaderExecution exec(dxData->mContext, dxData->mShaders[KP_DXShader_Render], 10);
         DX_ERR(exec.SetParamBuffer(&renderParamsDX, sizeof(renderParamsDX)));
         DX_ERR(exec.SetUnorderedAccessView((ID3D12Resource *)outputMemory, outputBytes));
         DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[0].memory, scalarBytes));
         DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[1].memory, scalarBytes));
         DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[2].memory, scalarBytes));
         DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)renderSampleMemory, renderSampleBytes));
+        DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[6].memory, scalarBytes));
+        DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)sampleMemory, sampleBytes));
+        DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[7].memory, scalarBytes));
+        DX_ERR(exec.SetShaderResourceView((ID3D12Resource *)scratch[8].memory, scalarBytes));
         DX_ERR(exec.Execute(gridX, gridY));
     }
 
-    for (int i = 0; i < 7; ++i) {
+    for (int i = 0; i < 9; ++i) {
         if (scratch[i].world) {
             gpuSuite->DisposeGPUWorld(in_data->effect_ref, scratch[i].world);
         }
@@ -2026,8 +2588,16 @@ static PF_Err SmartRenderGPU(
                                                     options:MTLResourceStorageModePrivate] autorelease];
     id<MTLBuffer> jfaBBuffer = [[device newBufferWithLength:seedBufferLength
                                                     options:MTLResourceStorageModePrivate] autorelease];
+    // 1.0.0b8-b10: inner shadow, outer shadow, and caustics fields -- each
+    // the matte re-sampled at an offset and blurred, same shape as matte.
+    id<MTLBuffer> innerShadowBuffer = [[device newBufferWithLength:scalarBufferLength
+                                                           options:MTLResourceStorageModePrivate] autorelease];
+    id<MTLBuffer> outerShadowBuffer = [[device newBufferWithLength:scalarBufferLength
+                                                           options:MTLResourceStorageModePrivate] autorelease];
+    id<MTLBuffer> causticsBuffer = [[device newBufferWithLength:scalarBufferLength
+                                                        options:MTLResourceStorageModePrivate] autorelease];
     if (!matteBuffer || !bevelBuffer || !heightBuffer || !scratchABuffer || !scratchBBuffer ||
-        !jfaABuffer || !jfaBBuffer) {
+        !jfaABuffer || !jfaBBuffer || !innerShadowBuffer || !outerShadowBuffer || !causticsBuffer) {
         return PF_Err_OUT_OF_MEMORY;
     }
 
@@ -2144,6 +2714,79 @@ static PF_Err SmartRenderGPU(
     [encoder setBytes:&softnessPass length:sizeof(softnessPass) atIndex:3];
     EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurVertical], gridWidth, gridHeight);
 
+    // 1.0.0b8-b10: inner shadow, outer shadow, and caustics fields -- the
+    // matte re-sampled at an angle/distance offset (ShadowOffsetKernel),
+    // then softened by the same separable blur pair used above. Outer
+    // shadow and caustics share one offset; scratchA/scratchB are free
+    // again since the height-map chain above is done with them. With the
+    // opacity/intensity at zero the composite kernel ignores the buffer
+    // entirely, so the dispatch is skipped and the buffer is left unused.
+    if (renderParams->shadowOpacity > 0.01f) {
+        float shadowOffset[2] = { renderParams->shadowOffsetX, renderParams->shadowOffsetY };
+        [encoder setBuffer:matteBuffer offset:0 atIndex:0];
+        [encoder setBuffer:scratchABuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:shadowOffset length:sizeof(shadowOffset) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_ShadowOffset], gridWidth, gridHeight);
+
+        const LiquidGlassPassParams shadowPass = MakeBlurPass(fmaxf(renderParams->shadowSoftness * 0.5f, 1.0f));
+        [encoder setBuffer:scratchABuffer offset:0 atIndex:0];
+        [encoder setBuffer:scratchBBuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:&shadowPass length:sizeof(shadowPass) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurHorizontal], gridWidth, gridHeight);
+
+        [encoder setBuffer:scratchBBuffer offset:0 atIndex:0];
+        [encoder setBuffer:innerShadowBuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:&shadowPass length:sizeof(shadowPass) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurVertical], gridWidth, gridHeight);
+    }
+
+    if (renderParams->outerShadowIntensity > 0.01f) {
+        float outerOffset[2] = { renderParams->outerOffsetX, renderParams->outerOffsetY };
+        [encoder setBuffer:matteBuffer offset:0 atIndex:0];
+        [encoder setBuffer:scratchABuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:outerOffset length:sizeof(outerOffset) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_ShadowOffset], gridWidth, gridHeight);
+
+        const LiquidGlassPassParams outerPass = MakeBlurPass(fmaxf(renderParams->outerShadowSpread * 0.5f, 1.0f));
+        [encoder setBuffer:scratchABuffer offset:0 atIndex:0];
+        [encoder setBuffer:scratchBBuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:&outerPass length:sizeof(outerPass) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurHorizontal], gridWidth, gridHeight);
+
+        [encoder setBuffer:scratchBBuffer offset:0 atIndex:0];
+        [encoder setBuffer:outerShadowBuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:&outerPass length:sizeof(outerPass) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurVertical], gridWidth, gridHeight);
+    }
+
+    if (renderParams->causticsIntensity > 0.01f) {
+        float causticsOffset[2] = { renderParams->outerOffsetX, renderParams->outerOffsetY };
+        [encoder setBuffer:matteBuffer offset:0 atIndex:0];
+        [encoder setBuffer:scratchABuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:causticsOffset length:sizeof(causticsOffset) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_ShadowOffset], gridWidth, gridHeight);
+
+        const LiquidGlassPassParams causticsPass = MakeBlurPass(fmaxf(renderParams->causticsSpread * 0.5f, 1.0f));
+        [encoder setBuffer:scratchABuffer offset:0 atIndex:0];
+        [encoder setBuffer:scratchBBuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:&causticsPass length:sizeof(causticsPass) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurHorizontal], gridWidth, gridHeight);
+
+        [encoder setBuffer:scratchBBuffer offset:0 atIndex:0];
+        [encoder setBuffer:causticsBuffer offset:0 atIndex:1];
+        [encoder setBuffer:paramsBuffer offset:0 atIndex:2];
+        [encoder setBytes:&causticsPass length:sizeof(causticsPass) atIndex:3];
+        EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_BlurVertical], gridWidth, gridHeight);
+    }
+
     // 4. Roughness: separable blur over the background world.
     if (blurBackground) {
         LiquidGlassPassParams bgPass = MakeBlurPass(renderParams->roughness);
@@ -2166,12 +2809,38 @@ static PF_Err SmartRenderGPU(
     }
 
     // 5. Composite.
+    LiquidGlassShadowParams shadowParams;
+    memset(&shadowParams, 0, sizeof(shadowParams));
+    shadowParams.compositeOnTop = (renderParams->adjustmentMode && renderParams->compositeOnTop) ? 1 : 0;
+    shadowParams.underPitch = int(sampleWorld->rowbytes / sizeof(PF_PixelFloat));
+    shadowParams.shadowRed = renderParams->shadowRed;
+    shadowParams.shadowGreen = renderParams->shadowGreen;
+    shadowParams.shadowBlue = renderParams->shadowBlue;
+    shadowParams.shadowOpacity = renderParams->shadowOpacity;
+    shadowParams.shadowMode = (int)renderParams->shadowMode;
+    shadowParams.outerShadowRed = renderParams->outerShadowRed;
+    shadowParams.outerShadowGreen = renderParams->outerShadowGreen;
+    shadowParams.outerShadowBlue = renderParams->outerShadowBlue;
+    shadowParams.outerShadowIntensity = renderParams->outerShadowIntensity;
+    shadowParams.outerShadowMode = (int)renderParams->outerShadowMode;
+    shadowParams.causticsRed = renderParams->causticsRed;
+    shadowParams.causticsGreen = renderParams->causticsGreen;
+    shadowParams.causticsBlue = renderParams->causticsBlue;
+    shadowParams.causticsIntensity = renderParams->causticsIntensity;
+    shadowParams.causticsMode = (int)renderParams->causticsMode;
+    shadowParams.confineToBounds = renderParams->confineToBounds ? 1 : 0;
+
     [encoder setBuffer:matteBuffer offset:0 atIndex:0];
     [encoder setBuffer:bevelBuffer offset:0 atIndex:1];
     [encoder setBuffer:heightBuffer offset:0 atIndex:2];
     [encoder setBuffer:(blurBackground ? backgroundBlurredBuffer : (id<MTLBuffer>)sampleMemory) offset:0 atIndex:3];
     [encoder setBuffer:(id<MTLBuffer>)outputMemory offset:0 atIndex:4];
     [encoder setBuffer:paramsBuffer offset:0 atIndex:5];
+    [encoder setBuffer:innerShadowBuffer offset:0 atIndex:6];
+    [encoder setBuffer:(id<MTLBuffer>)sampleMemory offset:0 atIndex:7];
+    [encoder setBuffer:outerShadowBuffer offset:0 atIndex:8];
+    [encoder setBuffer:causticsBuffer offset:0 atIndex:9];
+    [encoder setBytes:&shadowParams length:sizeof(shadowParams) atIndex:10];
     EncodeKernel(encoder, gpuData->pipelines[KP_MetalPipeline_Render], gridWidth, gridHeight);
 
     [encoder endEncoding];
