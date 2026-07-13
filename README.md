@@ -3,10 +3,8 @@
 
 ## Overview
 This is an After Effects effect that renders Apple-style "Liquid
-Glass" from any layer's alpha, including text layers, but primarily Shape Layers: an exact-distance bevel field drives
-slope-based refraction with edge inversion, chromatic dispersion, roughness
-frost, a bi-directional clear-coat light, tint, zoom, and inner/outer
-shadows with caustics through the glass. GPU accelerated, Metal on macOS, CUDA on PC. The CPU render is
+Glass" from any layer's alpha, including text layers, but primarily Shape Layers.
+GPU accelerated, Metal on macOS, CUDA on PC. The CPU render is
 currently a passthrough on both platforms.
 
 ## Using the effect
