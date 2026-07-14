@@ -480,7 +480,7 @@ extern void KPLiquidGlassRender_CUDA(
     int inSampleLeft, int inSampleTop, int inOutputLeft, int inOutputTop,
     float const *inC2S,
     int inShadowMode, int inCompositeOnTop, int inUnderPitch,
-    int inOuterShadowMode, int inCausticsMode);
+    int inOuterShadowMode, int inCausticsMode, int inConfineToBounds);
 #endif
 
 #if HAS_HLSL
