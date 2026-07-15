@@ -3,7 +3,7 @@
 
 ## Overview
 This is an After Effects effect that renders any layer's alpha as
-Glass (in the Apple style). This is not limited for only Shape Layers, Text Layers or any layer with alpha will work too.
+Glass (in the Apple style). This is not limited to only a Shape Layers. Text Layers or any layer with alpha will work too.
 GPU accelerated, Metal on macOS, CUDA on PC. 
 *The CPU render is currently a passthrough (will not be rendered at all) on both platforms. AMD's GPUs support currently WIP.*
 
