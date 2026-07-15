@@ -4,8 +4,12 @@
 ## Overview
 This is an After Effects effect that renders Apple-style "Liquid
 Glass" from any layer's alpha, including text layers, but primarily Shape Layers.
-GPU accelerated, Metal on macOS, CUDA on PC. The CPU render is
-currently a passthrough on both platforms.
+GPU accelerated, Metal on macOS, CUDA on PC. 
+*The CPU render is currently a passthrough (will not be rendered at all) on both platforms. AMD's GPUs support currently WIP.*
+
+## Limitations
+The CPU render is currently a passthrough (will not be rendered at all) on both platforms. 
+AMD's GPUs support currently WIP.
 
 ## Using the effect
 
